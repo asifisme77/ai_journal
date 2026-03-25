@@ -1,0 +1,19 @@
+# Python/Flask Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Local Database - Critical to prevent leaking secure logs!
+journal.db
+journal.db-journal
+
+# File Uploads - Prevent committing personal user attachments
+static/uploads/
+
+# IDE / System Files
+.vscode/
+.idea/
+.DS_Store
