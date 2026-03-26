@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,13 +10,46 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js" referrerpolicy="origin"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=22">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=24">
 </head>
+
 <body>
 
 
     <div class="app-container">
         <aside class="sidebar glass-panel">
+            <div id="search-panel">
+                <div class="search-quick">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="search-input" placeholder="Search tasks or journals...">
+                    <button id="search-advanced-toggle" title="Advanced search">
+                        <i class="ph ph-sliders-horizontal"></i>
+                    </button>
+                </div>
+                <div id="search-advanced" class="search-advanced hidden">
+                    <div class="search-field">
+                        <label>Status</label>
+                        <div class="search-state-chips">
+                            <label><input type="checkbox" value="TODO"> TODO</label>
+                            <label><input type="checkbox" value="WIP"> WIP</label>
+                            <label><input type="checkbox" value="MEMO"> MEMO</label>
+                            <label><input type="checkbox" value="DONE"> DONE</label>
+                        </div>
+                    </div>
+                    <div class="search-field">
+                        <label>Date Range</label>
+                        <div class="search-dates">
+                            <input type="date" id="search-from">
+                            <span>&mdash;</span>
+                            <input type="date" id="search-to">
+                        </div>
+                    </div>
+                    <div class="search-actions">
+                        <button id="search-clear" class="btn-secondary btn-small">Clear</button>
+                        <button id="search-apply" class="btn-primary btn-small">Apply Filters</button>
+                    </div>
+                </div>
+            </div>
             <h2><i class="ph ph-clock"></i> Timeline</h2>
             <div id="timeline-container">
                 <div class="loading-state"><i class="ph ph-spinner ph-spin"></i> Loading...</div>
@@ -25,18 +59,18 @@
         <main class="main-column">
             <section class="add-item-section glass-panel" style="margin-bottom: 1rem;">
                 <form id="add-item-form">
-                    <input type="text" id="heading-input" placeholder="What are you working on?" required autocomplete="off">
+                    <input type="text" id="heading-input" placeholder="What are you working on?" required
+                        autocomplete="off">
                     <button type="submit" class="btn-primary"><i class="ph ph-plus"></i> Add</button>
                 </form>
             </section>
-            <div id="global-toolbar" class="sticky-toolbar glass-panel"></div>
 
             <section class="items-list" id="items-container">
                 <div class="loading-state">
                     <i class="ph ph-spinner ph-spin"></i> Loading journal entries...
                 </div>
             </section>
-            
+
             <h3 class="archived-header" id="archived-header"><i class="ph ph-archive"></i> Archived View</h3>
             <div id="archived-container" class="items-list"></div>
         </main>
@@ -44,4 +78,5 @@
 
     <script src="{{ url_for('static', filename='js/app.js') }}?v=7"></script>
 </body>
+
 </html>

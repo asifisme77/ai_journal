@@ -109,10 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="entries-container" id="entries-${item.id}">
                         <!-- Entries Will Load Here -->
                     </div>
-                    
-                    <div class="add-entry-row">
-                        <button class="btn-ghost" onclick="addEntry(${item.id})"><i class="ph ph-plus"></i> Add New Entry</button>
-                    </div>
                 </div>
             </div>
         `;
@@ -132,9 +128,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render entries for this item
         const entriesContainer = div.querySelector(`#entries-${item.id}`);
         if (item.entries && item.entries.length > 0) {
-            item.entries.forEach(entry => {
-                entriesContainer.appendChild(createEntryElement(entry));
+            item.entries.forEach((entry, index) => {
+                const isLast = index === item.entries.length - 1;
+                entriesContainer.appendChild(createEntryElement(entry, isLast));
             });
+        } else {
+            entriesContainer.innerHTML = `
+                <div style="display: flex; justify-content: flex-start; margin-top: 0.5rem; padding-bottom: 0.5rem;">
+                    <button class="btn-ghost" style="padding: 0.35rem 0.85rem; width: auto; font-size: 0.75rem; border-radius: 6px; font-weight: 500;" onclick="addEntry(${item.id})"><i class="ph ph-plus"></i> Add First Entry</button>
+                </div>
+            `;
         }
     }
     function renderTimeline(items) {
@@ -219,6 +222,87 @@ document.addEventListener('DOMContentLoaded', () => {
             timelineContainer.appendChild(yearDetails);
         }
     }
+
+    // --- Search Feature Implementation ---
+    const searchInput = document.getElementById('search-input');
+    const advancedToggle = document.getElementById('search-advanced-toggle');
+    const advancedPanel = document.getElementById('search-advanced');
+    const searchApply = document.getElementById('search-apply');
+    const searchClear = document.getElementById('search-clear');
+
+    if (advancedToggle) {
+        advancedToggle.addEventListener('click', () => {
+            advancedPanel.classList.toggle('hidden');
+        });
+    }
+
+    let searchDebounce;
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                performSearch();
+            }, 300);
+        });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    if (searchApply) {
+        searchApply.addEventListener('click', performSearch);
+    }
+
+    if (searchClear) {
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            document.querySelectorAll('.search-state-chips input').forEach(cb => cb.checked = false);
+            document.getElementById('search-from').value = '';
+            document.getElementById('search-to').value = '';
+            fetchItems(); // Restores full timeline and active items
+        });
+    }
+
+    async function performSearch() {
+        const q = searchInput.value.trim();
+        const selectedStates = Array.from(document.querySelectorAll('.search-state-chips input:checked')).map(cb => cb.value).join(',');
+        const dateFrom = document.getElementById('search-from').value;
+        const dateTo = document.getElementById('search-to').value;
+
+        // If all filters are empty, just do a normal fetch (restores full timeline)
+        if (!q && !selectedStates && !dateFrom && !dateTo) {
+            fetchItems();
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (q) params.append('q', q);
+        if (selectedStates) params.append('state', selectedStates);
+        if (dateFrom) params.append('from', dateFrom);
+        if (dateTo) params.append('to', dateTo);
+
+        try {
+            const res = await fetch(`/api/search?${params.toString()}`);
+            if (!res.ok) throw new Error('Search request failed');
+            const items = await res.json();
+            
+            // Note: We do NOT clear the itemsContainer or renderItems here.
+            // We ONLY update the timeline.
+            document.getElementById('timeline-container').innerHTML = '';
+
+            if (items.length === 0) {
+                document.getElementById('timeline-container').innerHTML = `<div class="loading-state">No results.</div>`;
+            } else {
+                renderTimeline(items);
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            document.getElementById('timeline-container').innerHTML = `<div class="loading-state" style="color:#ef4444">Search error.</div>`;
+        }
+    }
 });
 
 // Helper to parse naive backend UTC strings securely into localized client Date objects
@@ -242,19 +326,24 @@ function escapeHtml(unsafe) {
          .replace(/'/g, "&#039;");
 }
 
-function createEntryElement(entry) {
+function createEntryElement(entry, isLast = false) {
     const entryDiv = document.createElement('div');
     entryDiv.className = 'journal-entry';
     entryDiv.dataset.entryId = entry.id;
 
     const dateObj = parseUTCDate(entry.created_at);
     const dateStr = dateObj.toLocaleDateString() + ' at ' + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const addButtonHTML = isLast ? `<button class="btn-secondary btn-small" style="border: none; padding: 0.25rem; color: #4ade80; margin-right: 2px;" onclick="addEntry(${entry.work_item_id})" title="Add new entry"><i class="ph ph-plus-circle"></i></button>` : '';
 
     entryDiv.innerHTML = `
-        <div class="entry-header">
-            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)">
-            <span class="entry-date">${dateStr}</span>
-            <button class="btn-secondary btn-danger btn-small" style="margin-left: 0.5rem; border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id})"><i class="ph ph-x"></i></button>
+        <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px;">
+            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
+            <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
+            <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
+                <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
+                ${addButtonHTML}
+                <button class="btn-secondary btn-danger btn-small" style="border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id})"><i class="ph ph-trash"></i></button>
+            </div>
         </div>
         <div id="tinymce-${entry.id}" class="tinymce-editor">${entry.content || '<p><br></p>'}</div>
     `;
@@ -270,7 +359,7 @@ function createEntryElement(entry) {
             selector: `#${targetId}`,
             inline: true,
             indentation: '20px',
-            fixed_toolbar_container: '#global-toolbar',
+            fixed_toolbar_container: `#toolbar-${entry.id}`,
             skin: 'oxide-dark',
             menubar: false,
             statusbar: false,
@@ -545,7 +634,8 @@ function createEntryElement(entry) {
 }
 
 window.addEntry = async function(itemId) {
-    const dateTitle = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const now = new Date();
+    const dateTitle = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     
     try {
         const res = await fetch(`/api/items/${itemId}/entries`, {
@@ -557,7 +647,14 @@ window.addEntry = async function(itemId) {
         if (res.ok) {
             const newEntry = await res.json();
             const entriesContainer = document.getElementById(`entries-${itemId}`);
-            entriesContainer.appendChild(createEntryElement(newEntry));
+            
+            const existingPlusBtns = entriesContainer.querySelectorAll('.ph-plus-circle');
+            existingPlusBtns.forEach(icon => icon.parentElement.remove());
+            
+            const addFirstBtn = entriesContainer.querySelector('.btn-ghost');
+            if (addFirstBtn) addFirstBtn.parentElement.remove();
+            
+            entriesContainer.appendChild(createEntryElement(newEntry, true));
             
             // Auto expand the work item if it's not already
             const workItem = document.querySelector(`.work-item[data-id="${itemId}"]`);
@@ -604,13 +701,32 @@ window.deleteEntry = async function(entryId) {
         });
         if (res.ok || res.status === 204) {
             const el = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
-            if (el) el.remove();
-            
-            // Clean up TinyMCE instance
-            const editor = tinymce.get(`tinymce-${entryId}`);
-            if (editor) {
-                editor.remove();
+            if (el) {
+                const container = el.parentElement;
+                const workItemId = container.id.split('-')[1];
+                el.remove();
+                
+                const remainingEntries = container.querySelectorAll('.journal-entry');
+                if (remainingEntries.length === 0) {
+                    container.innerHTML = `
+                        <div style="display: flex; justify-content: flex-start; margin-top: 0.5rem; padding-bottom: 0.5rem;">
+                            <button class="btn-ghost" style="padding: 0.35rem 0.85rem; width: auto; font-size: 0.75rem; border-radius: 6px; font-weight: 500;" onclick="addEntry(${workItemId})"><i class="ph ph-plus"></i> Add First Entry</button>
+                        </div>
+                    `;
+                } else {
+                    const newLastEntry = remainingEntries[remainingEntries.length - 1];
+                    const metaDiv = newLastEntry.querySelector('.entry-meta');
+                    if (metaDiv && !metaDiv.querySelector('.ph-plus-circle')) {
+                        const ptrHTML = `<button class="btn-secondary btn-small" style="border: none; padding: 0.25rem; color: #4ade80; margin-right: 2px;" onclick="addEntry(${workItemId})" title="Add new entry"><i class="ph ph-plus-circle"></i></button>`;
+                        const trashBtn = metaDiv.querySelector('.btn-danger');
+                        if (trashBtn) trashBtn.insertAdjacentHTML('beforebegin', ptrHTML);
+                        else metaDiv.insertAdjacentHTML('beforeend', ptrHTML);
+                    }
+                }
             }
+            
+            const editor = tinymce.get(`tinymce-${entryId}`);
+            if (editor) editor.remove();
         }
     } catch (error) {
         console.error('Error deleting entry:', error);

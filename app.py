@@ -138,6 +138,83 @@ def delete_entry(entry_id):
     db.session.delete(entry)
     db.session.commit()
     return '', 204
+
+@app.route('/api/search', methods=['GET'])
+def search_items():
+    q = request.args.get('q', '')
+    states = request.args.get('state', '')
+    from_date = request.args.get('from', '')
+    to_date = request.args.get('to', '')
+
+    query = WorkItem.query
+
+    if states:
+        state_list = states.split(',')
+        query = query.filter(WorkItem.state.in_(state_list))
+
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date)
+            query = query.filter(WorkItem.created_at >= from_dt)
+        except ValueError:
+            pass
+
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date)
+            # If it's a date only, set it to the end of that day
+            if len(to_date) == 10:
+                to_dt = to_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(WorkItem.created_at <= to_dt)
+        except ValueError:
+            pass
+
+    if q:
+        search_filter = WorkItem.heading.ilike(f'%{q}%')
+        
+        # Check if any entry matches the query
+        has_matching_entry = WorkItem.entries.any(
+            db.or_(
+                JournalEntry.title.ilike(f'%{q}%'),
+                JournalEntry.content.ilike(f'%{q}%')
+            )
+        )
+        query = query.filter(db.or_(search_filter, has_matching_entry))
+
+    # Find items matching query filters
+    items = query.order_by(WorkItem.created_at.desc()).all()
+    
+    if not q:
+        return jsonify([item.to_dict() for item in items])
+    
+    # Deep filtering: only return entries that match OR all entries if heading matches
+    # This serves as a precise filter for the Timeline sidebar.
+    q_lower = q.lower()
+    filtered_results = []
+    
+    for item in items:
+        item_dict = item.to_dict()
+        heading_matches = q_lower in item.heading.lower()
+        
+        if heading_matches:
+            # If the heading matches, we keep the item as is (all entries)
+            # This allows the user to see the full context when searching by task name.
+            pass
+        else:
+            # If heading doesn't match, only keep entries that do
+            matching_entries = []
+            for entry in item_dict['entries']:
+                title_matches = q_lower in (entry.get('title') or '').lower()
+                content_matches = q_lower in (entry.get('content') or '').lower()
+                if title_matches or content_matches:
+                    matching_entries.append(entry)
+            item_dict['entries'] = matching_entries
+            
+        # Only include the item if it still has matching entries or the heading matched
+        if heading_matches or item_dict['entries']:
+            filtered_results.append(item_dict)
+            
+    return jsonify(filtered_results)
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
