@@ -207,8 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         entryDiv.innerHTML = `
                             <div class="timeline-task">${escapeHtml(entry.parentItem.heading)}</div>
                             <div class="timeline-entry-title">
-                                ${escapeHtml(entry.title)}
-                                <span style="float: right; font-size: 0.75rem; color: var(--text-secondary);">${timeStr}</span>
+                                <span class="timeline-entry-text">${escapeHtml(entry.title)}</span>
+                                <span class="timeline-time">${timeStr}</span>
                             </div>
                         `;
                         entryDiv.onclick = () => window.focusEntry(entry.id, isArchived, entry.parentItem.id);
@@ -360,12 +360,13 @@ function createEntryElement(entry, isLast = false) {
             inline: true,
             indentation: '20px',
             fixed_toolbar_container: `#toolbar-${entry.id}`,
+            ui_container: 'body',
             skin: 'oxide-dark',
             menubar: false,
             statusbar: false,
             extended_valid_elements: 'details[class|open|style],summary',
-            plugins: 'lists link table autolink nonbreaking',
-            toolbar: 'blocks fontfamily | bold italic underline | bullist numlist | outdent indent | table link embedfile collapsible | removeformat',
+            plugins: 'lists link table autolink nonbreaking forecolor backcolor',
+            toolbar: 'blocks fontfamily forecolor backcolor | bold italic underline | bullist numlist | outdent indent | table link embedfile collapsible | removeformat',
             setup: function(editor) {
                 function getOutlinerIndent(block) {
                     let pl = parseInt(editor.dom.getStyle(block, 'padding-left') || 0, 10);

@@ -340,9 +340,15 @@ body {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
     transition: all 0.3s ease;
     animation: slideIn 0.3s ease forwards;
+    position: relative;
+    z-index: 1;
+}
+
+.work-item:focus-within {
+    z-index: 100;
 }
 
 @keyframes slideIn {
@@ -451,14 +457,20 @@ body {
     color: var(--state-done);
 }
 
+.work-item.expanded {
+    overflow: visible;
+}
+
 .work-item-content {
     display: grid;
     grid-template-rows: 0fr;
     transition: grid-template-rows 0.3s ease;
+    overflow: hidden;
 }
 
 .work-item.expanded .work-item-content {
     grid-template-rows: 1fr;
+    overflow: visible;
 }
 
 .content-inner {
@@ -470,6 +482,7 @@ body {
 .work-item.expanded .content-inner {
     padding: 0.5rem;
     border-top-color: var(--border-color);
+    overflow: visible;
 }
 
 .content-textarea {
@@ -891,6 +904,23 @@ details.timeline-date>summary {
 .timeline-entry-title {
     font-size: 0.85rem;
     color: var(--text-primary);
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    align-items: baseline;
+    min-width: 0; /* Important for flex truncation */
+}
+
+.timeline-entry-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timeline-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
 }
 
 /* Highlight Animation */
@@ -970,8 +1000,11 @@ details.timeline-date>summary {
     align-items: center;
 }
 
-.entry-toolbar-container .tox-tbtn {
+.entry-toolbar-container .tox-tbtn:not(.tox-tbtn--select) {
     width: 24px !important;
+}
+
+.entry-toolbar-container .tox-tbtn {
     height: 24px !important;
     margin: 0 !important;
     background: transparent !important;
