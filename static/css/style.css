@@ -619,6 +619,9 @@ body {
     color: var(--text-primary);
     font-size: 11.5px;
     transition: all 0.2s;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow-x: auto;
 }
 
 .tinymce-editor a {
@@ -645,8 +648,8 @@ a.embedded-file:hover {
 }
 
 .tinymce-editor:focus-within {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.1);
 }
 
 .tinymce-editor:hover {
@@ -657,6 +660,23 @@ a.embedded-file:hover {
     margin: 1px 0;
 }
 
+.tinymce-editor table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    table-layout: fixed;
+}
+
+.tinymce-editor td,
+.tinymce-editor th {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px;
+    position: relative;
+    min-width: 30px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
 /* Log Block Styling */
 .log-block {
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -664,6 +684,35 @@ a.embedded-file:hover {
     padding: 10px;
     background: rgba(0, 0, 0, 0.2);
     margin: 10px 0;
+    outline: none !important;
+    overflow-x: auto;
+}
+
+.log-block:focus-within {
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: none !important;
+}
+
+.log-block table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    table-layout: fixed;
+}
+
+.log-block td,
+.log-block th {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 8px;
+    position: relative;
+    min-width: 30px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.log-block th {
+    background: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
 }
 
 .log-block summary {
@@ -691,6 +740,16 @@ a.embedded-file:hover {
     white-space: pre-wrap;
     word-break: break-all;
     color: #e2e8f0;
+    outline: none !important;
+}
+
+.log-block pre::selection,
+.log-block code::selection {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.log-block pre:focus {
+    box-shadow: none !important;
 }
 
 .delete-log-block {
@@ -723,6 +782,13 @@ a.embedded-file:hover {
     content: "\25B6";
 }
 
+/* Hide collapse chevron on table cells and content inside tables */
+.tinymce-editor table .parent-node::before,
+.tinymce-editor td.parent-node::before,
+.tinymce-editor th.parent-node::before {
+    display: none !important;
+}
+
 .tox .tox-toolbar,
 .tox .tox-toolbar__overflow,
 .tox .tox-toolbar__primary {
@@ -744,6 +810,22 @@ a.embedded-file:hover {
 
 .tox .tox-statusbar {
     display: none !important;
+}
+
+.mce-content-body {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    overflow-x: auto;
+}
+
+.mce-content-body table {
+    table-layout: fixed;
+}
+
+.mce-content-body td,
+.mce-content-body th {
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 .btn-secondary {
@@ -924,19 +1006,14 @@ details.timeline-date>summary {
 }
 
 /* Highlight Animation */
-@keyframes pulseHighlight {
+@keyframes highlightPulse {
     0% {
-        background-color: rgba(59, 130, 246, 0.5);
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+        background-color: rgba(59, 130, 246, 0.2);
+        box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
     }
-
-    70% {
-        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
-    }
-
     100% {
         background-color: transparent;
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+        box-shadow: none;
     }
 }
 
