@@ -577,9 +577,16 @@ function initTinyMCE(entry) {
         extended_valid_elements: 'details[class|open|style],summary',
         plugins: 'lists link table autolink nonbreaking forecolor backcolor',
         toolbar: 'blocks fontfamily forecolor backcolor | bold italic underline | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
-        table_default_styles: {
-            width: '60%'
+        table_default_attributes: {
+            border: '0'
         },
+        table_default_styles: {
+            width: '60%',
+            'border-collapse': 'collapse'
+        },
+        table_resize_bars: true,
+        table_column_resizing: true,
+        table_use_colgroups: false,
 
         setup: function(editor) {
 
@@ -780,7 +787,7 @@ function initTinyMCE(entry) {
             });
 
             /**
-             * Remove Format with Indentation: removes text formatting (bold, italic, colors, etc.)
+             * Remove Format with Indentation: removes text formatting (bold, italic, colors, links, etc.)
              * while preserving the block's indentation level.
              */
             editor.ui.registry.addButton('removeformatwithindent', {
@@ -795,14 +802,35 @@ function initTinyMCE(entry) {
                         const paddingLeft = editor.dom.getStyle(block, 'padding-left');
                         const marginLeft = editor.dom.getStyle(block, 'margin-left');
 
-                        // Remove all formatting
-                        editor.execCommand('removeFormat');
+                        // Remove all formatting including links
+                        editor.execCommand('removeFormat', false, {
+                            'selector': 'b,strong,i,em,u,strike,s,sub,sup,span,font,a',
+                            'attributes': ['style', 'class', 'id', 'title', 'href', 'target', 'rel']
+                        });
+
+                        // Also remove any remaining links specifically
+                        const links = editor.dom.select('a');
+                        links.forEach(function(link) {
+                            const text = link.textContent || link.innerText;
+                            editor.dom.replace(editor.dom.create('span', {}, text), link);
+                        });
 
                         // Restore indentation
                         if (paddingLeft) editor.dom.setStyle(block, 'padding-left', paddingLeft);
                         if (marginLeft) editor.dom.setStyle(block, 'margin-left', marginLeft);
                     } else {
-                        editor.execCommand('removeFormat');
+                        // Remove all formatting including links
+                        editor.execCommand('removeFormat', false, {
+                            'selector': 'b,strong,i,em,u,strike,s,sub,sup,span,font,a',
+                            'attributes': ['style', 'class', 'id', 'title', 'href', 'target', 'rel']
+                        });
+
+                        // Also remove any remaining links specifically
+                        const links = editor.dom.select('a');
+                        links.forEach(function(link) {
+                            const text = link.textContent || link.innerText;
+                            editor.dom.replace(editor.dom.create('span', {}, text), link);
+                        });
                     }
                 }
             });

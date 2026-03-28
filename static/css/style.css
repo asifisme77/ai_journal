@@ -13,7 +13,13 @@
     --state-wip: #facc15;     /* Yellow */
     --state-memo: #3b82f6;    /* Blue */
     --state-done: #22c55e;    /* Green */
-}
+
+    --active-entry-bg: rgba(48, 104, 194, 0.4);
+
+    /* Visual hierarchy colors */
+    --task-header-bg: rgba(30, 41, 59, 0.8);
+    --entry-header-bg: rgba(51, 65, 85, 0.4);
+    --editor-bg: rgba(15, 23, 42, 0.6);
 
 * {
     box-sizing: border-box;
@@ -349,6 +355,8 @@ body {
 
 .work-item:focus-within {
     z-index: 100;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 @keyframes slideIn {
@@ -375,7 +383,8 @@ body {
     padding: 0.5rem 0.75rem;
     cursor: pointer;
     user-select: none;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--task-header-bg);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .work-item-title-group {
@@ -529,6 +538,10 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--entry-header-bg);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .entry-title-input {
@@ -545,7 +558,11 @@ body {
     transition: all 0.2s;
 }
 
-.entry-title-input:focus,
+.entry-title-input:focus {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
 .entry-title-input:hover {
     border-color: var(--border-color);
     background: rgba(0, 0, 0, 0.3);
@@ -568,8 +585,9 @@ body {
 
 .item-title-input:focus,
 .item-title-input:hover {
-    border-color: var(--border-color);
-    background: rgba(0, 0, 0, 0.3);
+    border-color: var(--primary-color);
+    background: rgba(59, 130, 246, 0.15);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
     outline: none;
 }
 
@@ -612,7 +630,7 @@ body {
 .tinymce-editor {
     border: 1px solid rgba(255, 255, 255, 0.03);
     border-radius: 6px;
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--editor-bg);
     padding: 8px 10px 8px 24px;
     min-height: 20px;
     outline: none;
@@ -648,8 +666,9 @@ a.embedded-file:hover {
 }
 
 .tinymce-editor:focus-within {
-    border-color: rgba(59, 130, 246, 0.5);
-    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-color);
+    background: var(--active-entry-bg);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
 }
 
 .tinymce-editor:hover {
@@ -826,6 +845,33 @@ a.embedded-file:hover {
 .mce-content-body th {
     word-break: break-word;
     overflow-wrap: break-word;
+}
+
+/* Table column resizing */
+.mce-content-body .mce-resize-bar {
+    background: var(--primary-color) !important;
+    opacity: 0.7 !important;
+    width: 3px !important;
+    cursor: col-resize !important;
+    position: absolute !important;
+    z-index: 1000 !important;
+}
+
+.mce-content-body .mce-resize-bar:hover {
+    opacity: 1 !important;
+    background: var(--primary-hover) !important;
+}
+
+.mce-content-body .mce-table-resize-handle {
+    background: var(--primary-color) !important;
+    border: 1px solid var(--border-color) !important;
+    z-index: 1001 !important;
+}
+
+/* Ensure table cells don't interfere with resize handles */
+.mce-content-body td,
+.mce-content-body th {
+    position: relative !important;
 }
 
 .btn-secondary {
