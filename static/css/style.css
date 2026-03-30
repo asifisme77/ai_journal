@@ -610,6 +610,40 @@ body {
     white-space: nowrap;
 }
 
+/* Entry Toggle & Collapse */
+.entry-toggle-icon {
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+}
+
+.journal-entry.expanded .entry-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.entry-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease;
+    overflow: hidden;
+}
+
+.journal-entry.expanded .entry-content {
+    grid-template-rows: 1fr;
+    overflow: visible;
+}
+
+.entry-content-inner {
+    overflow: hidden;
+    padding: 0;
+}
+
+.journal-entry.expanded .entry-content-inner {
+    padding: 0.25rem 0;
+    overflow: visible;
+}
+
 .btn-small {
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
@@ -637,6 +671,24 @@ body {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
     border-color: var(--text-secondary);
+}
+
+/* Floating Toolbar */
+.floating-toolbar {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 /* ----- Inline TinyMCE Editor Styling ----- */

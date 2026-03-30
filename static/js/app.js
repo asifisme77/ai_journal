@@ -520,7 +520,7 @@ function initResizableLogBlockColumns(editor) {
  */
 function createEntryElement(entry, isLast = false) {
     const entryDiv = document.createElement('div');
-    entryDiv.className = 'journal-entry';
+    entryDiv.className = 'journal-entry expanded';
     entryDiv.dataset.entryId = entry.id;
 
     const dateObj = parseUTCDate(entry.created_at);
@@ -534,17 +534,33 @@ function createEntryElement(entry, isLast = false) {
         : '';
 
     entryDiv.innerHTML = `
-        <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px;">
-            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
-            <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
+        <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px; cursor: pointer;">
+            <i class="ph ph-caret-down entry-toggle-icon"></i>
+            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onclick="event.stopPropagation()" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
             <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
                 <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
                 ${addButtonHTML}
-                <button class="btn-secondary btn-danger btn-small" style="border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id})"><i class="ph ph-trash"></i></button>
+                <button class="btn-secondary btn-danger btn-small" style="border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id}); event.stopPropagation()"><i class="ph ph-trash"></i></button>
             </div>
         </div>
-        <div id="tinymce-${entry.id}" class="tinymce-editor">${entry.content || '<p><br></p>'}</div>
+        <div class="entry-content">
+            <div class="entry-content-inner">
+                <div id="tinymce-${entry.id}" class="tinymce-editor" data-toolbar-id="toolbar-${entry.id}">${entry.content || '<p><br></p>'}</div>
+            </div>
+        </div>
     `;
+    
+    // Create floating toolbar container (positioned outside entry structure)
+    const toolbarContainer = document.createElement('div');
+    toolbarContainer.id = `toolbar-${entry.id}`;
+    toolbarContainer.className = 'entry-toolbar-container floating-toolbar';
+    document.body.appendChild(toolbarContainer);
+
+    // Toggle expand/collapse on header click
+    entryDiv.querySelector('.entry-header').addEventListener('click', (e) => {
+        e.stopPropagation();
+        entryDiv.classList.toggle('expanded');
+    });
 
     // Initialize TinyMCE on next tick (element must be in DOM first)
     setTimeout(() => initTinyMCE(entry), 0);
@@ -601,7 +617,8 @@ function initTinyMCE(entry) {
              * block is more deeply indented.
              */
             function updateOutliner() {
-                const blocks = editor.dom.select('p, h1, h2, h3, h4, h5, h6, li, details');
+                // Include all common block-level elements to handle styled content
+                const blocks = editor.dom.select('p, h1, h2, h3, h4, h5, h6, li, details, div, blockquote, pre, section, article, aside');
                 let hideThreshold = Infinity;
 
                 for (let i = 0; i < blocks.length; i++) {
@@ -680,6 +697,20 @@ function initTinyMCE(entry) {
             editor.on('blur', () => {
                 clearTimeout(saveTimeout);
                 triggerSave();
+                
+                // Hide toolbar on blur
+                const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
+                if (toolbarEl) {
+                    toolbarEl.style.display = 'none';
+                }
+            });
+
+            editor.on('focus', () => {
+                // Show toolbar on focus
+                const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
+                if (toolbarEl) {
+                    toolbarEl.style.display = 'flex';
+                }
             });
 
             editor.on('input change keyup NodeChange', () => {
