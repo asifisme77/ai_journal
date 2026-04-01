@@ -56,11 +56,56 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------- Fetch & Render All Items ----------
 
     /**
+     * Fetches all reminders from API and displays them.
+     */
+    async function fetchReminders() {
+        try {
+            const res = await fetch('/api/markers/reminders');
+            const reminders = await res.json();
+            const container = document.getElementById('reminders-container');
+            container.innerHTML = '';
+            
+            if (reminders.length === 0) {
+                container.innerHTML = '<div class="loading-state">No active reminders.</div>';
+                return;
+            }
+            
+            reminders.forEach(marker => {
+                let timeStr = '';
+                let hasReminder = false;
+                if (marker.reminder_due_date) {
+                    const dateObj = parseUTCDate(marker.reminder_due_date);
+                    timeStr = '<i class="ph ph-bell-ringing"></i> ' + dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                    hasReminder = true;
+                } else {
+                    const dateObj = parseUTCDate(marker.created_at);
+                    timeStr = '<i class="ph ph-clock"></i> ' + dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                }
+                
+                const div = document.createElement('div');
+                div.className = `reminder-item ${hasReminder ? 'has-reminder' : ''}`;
+                div.innerHTML = `
+                    <div class="reminder-item-text" title="${escapeHtml(marker.text)}">"${escapeHtml(marker.text)}"</div>
+                    <div class="reminder-item-meta">
+                        <span class="reminder-item-task">${escapeHtml(marker.work_item_heading)}</span>
+                        <span class="reminder-item-time">${timeStr}</span>
+                    </div>
+                `;
+                div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id);
+                container.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Error fetching reminders:', error);
+        }
+    }
+
+    /**
      * Fetches all work items from the API and renders them.
      * Active items (not DONE, or MEMO from today) go to the main column.
      * All items feed into the timeline sidebar.
      */
     async function fetchItems() {
+        fetchReminders();
         try {
             const res = await fetch('/api/items');
             const items = await res.json();
@@ -249,14 +294,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const entryDiv = document.createElement('div');
                         entryDiv.className = `timeline-item ${stateClass} ${isArchived ? 'timeline-item-archived' : ''}`;
+                        
+                        let markersHTML = '';
+                        if (entry.markers && entry.markers.length > 0) {
+                            markersHTML = `<details class="timeline-marker-details" onclick="event.stopPropagation()">
+                                <summary>${entry.markers.length} Marker${entry.markers.length > 1 ? 's' : ''}</summary>
+                                <div class="timeline-markers">
+                                    ${entry.markers.map(m => `
+                                        <div class="timeline-marker-item" onclick="window.focusEntry(${entry.id}, ${isArchived}, ${entry.parentItem.id})">
+                                            <div class="timeline-marker-bubble ${m.reminder_due_date ? 'has-reminder' : ''}"></div>
+                                            <div class="timeline-marker-text" title="${escapeHtml(m.text || 'Marker')}">${escapeHtml(m.text || 'Marker')}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </details>`;
+                        }
+
                         entryDiv.innerHTML = `
                             <div class="timeline-task">${escapeHtml(entry.parentItem.heading)}</div>
-                            <div class="timeline-entry-title">
+                            <div class="timeline-entry-title" onclick="window.focusEntry(${entry.id}, ${isArchived}, ${entry.parentItem.id})">
                                 <span class="timeline-entry-text">${escapeHtml(entry.title)}</span>
                                 <span class="timeline-time">${timeStr}</span>
                             </div>
+                            ${markersHTML}
                         `;
-                        entryDiv.onclick = () => window.focusEntry(entry.id, isArchived, entry.parentItem.id);
                         dateContent.appendChild(entryDiv);
                     });
 
@@ -590,9 +651,10 @@ function initTinyMCE(entry) {
         skin: 'oxide-dark',
         menubar: false,
         statusbar: false,
-        extended_valid_elements: 'details[class|open|style],summary',
+        extended_valid_elements: 'details[class|open|style],summary,span[class|data-marker-id|contenteditable|title|style]',
         plugins: 'lists link table autolink nonbreaking forecolor backcolor',
         toolbar: 'blocks fontfamily forecolor backcolor | bold italic underline | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
+        contextmenu: 'addmarker link table',
         table_default_attributes: {
             border: '0'
         },
@@ -605,6 +667,35 @@ function initTinyMCE(entry) {
         table_use_colgroups: false,
 
         setup: function(editor) {
+
+            // ================================================================
+            // MARKER: Context Menu Integration
+            // ================================================================
+
+            editor.ui.registry.addMenuItem('addmarker', {
+                text: 'Add Marker',
+                icon: 'highlight-bg-color',
+                onAction: async function() {
+                    const selectedText = editor.selection.getContent({format: 'text'});
+                    if (!selectedText) return;
+
+                    try {
+                        const res = await fetch(`/api/entries/${entry.id}/markers`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: selectedText })
+                        });
+                        if (res.ok) {
+                            const marker = await res.json();
+                            const currentHtml = editor.selection.getContent();
+                            editor.selection.setContent(`<span class="marker marker-open" data-marker-id="${marker.id}">${currentHtml}</span><span class="marker-bubble" data-marker-id="${marker.id}" contenteditable="false" title="Marker Options">M</span>&nbsp;`);
+                            editor.fire('change');
+                        }
+                    } catch (error) {
+                        console.error('Error adding marker:', error);
+                    }
+                }
+            });
 
             // ================================================================
             // OUTLINER: Indent-based collapsible sections
@@ -885,6 +976,18 @@ function initTinyMCE(entry) {
                     return;
                 }
 
+                // --- Marker Bubble Click ---
+                if (e.target.classList && e.target.classList.contains('marker-bubble')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const markerId = e.target.getAttribute('data-marker-id');
+                    const rect = e.target.getBoundingClientRect();
+                    
+                    window.openMarkerPopover(markerId, rect.left, rect.bottom, editor, e.target);
+                    return false;
+                }
+
                 // --- Log block delete button ---
                 if (e.target.classList && e.target.classList.contains('delete-log-block')) {
                     const detailsBlock = editor.dom.getParent(e.target, 'DETAILS');
@@ -1001,6 +1104,113 @@ function initTinyMCE(entry) {
 // ============================================================================
 // GLOBAL CRUD OPERATIONS (called from inline HTML event handlers)
 // ============================================================================
+
+let currentMarkerContext = null;
+
+window.openMarkerPopover = function(markerId, x, y, editorInstance, bubbleElement) {
+    const popover = document.getElementById('marker-popover');
+    if (!popover) return;
+    
+    currentMarkerContext = { markerId, editor: editorInstance, bubble: bubbleElement };
+    
+    popover.style.left = `${x}px`;
+    popover.style.top = `${y + 10}px`;
+    popover.classList.remove('hidden');
+    
+    document.getElementById('marker-reminder-input').value = '';
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const popover = document.getElementById('marker-popover');
+    const btnClosePopover = document.getElementById('marker-popover-close');
+    const btnCloseMarker = document.getElementById('marker-btn-close');
+    const btnSaveReminder = document.getElementById('marker-btn-reminder');
+    const reminderInput = document.getElementById('marker-reminder-input');
+
+    if (!popover) return;
+
+    function hidePopover() {
+        popover.classList.add('hidden');
+        currentMarkerContext = null;
+    }
+
+    btnClosePopover.addEventListener('click', hidePopover);
+
+    // Hide popover when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!popover.contains(e.target) && !e.target.classList.contains('marker-bubble')) {
+            hidePopover();
+        }
+    });
+
+    // Close Marker
+    btnCloseMarker.addEventListener('click', async () => {
+        if (!currentMarkerContext) return;
+        const { markerId, editor, bubble } = currentMarkerContext;
+
+        try {
+            const res = await fetch(`/api/markers/${markerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: 'CLOSED' })
+            });
+
+            if (res.ok) {
+                // Remove Bubble
+                editor.dom.remove(bubble);
+                
+                // Unwrap Span
+                const markerSpan = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`)[0];
+                if (markerSpan) {
+                    while (markerSpan.firstChild) {
+                        markerSpan.parentNode.insertBefore(markerSpan.firstChild, markerSpan);
+                    }
+                    markerSpan.parentNode.removeChild(markerSpan);
+                }
+                
+                editor.fire('change');
+                hidePopover();
+                
+                // Refresh items to clear closed markers from timeline
+                location.reload(); 
+            }
+        } catch (error) {
+            console.error('Error closing marker:', error);
+        }
+    });
+
+    // Set Reminder
+    btnSaveReminder.addEventListener('click', async () => {
+        if (!currentMarkerContext) return;
+        const { markerId, editor, bubble } = currentMarkerContext;
+        const dateVal = reminderInput.value;
+        
+        const payload = { reminder_due_date: dateVal ? new Date(dateVal).toISOString() : null };
+
+        try {
+            const res = await fetch(`/api/markers/${markerId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                if (editor && bubble) {
+                    if (dateVal) {
+                        bubble.classList.add('has-reminder');
+                    } else {
+                        bubble.classList.remove('has-reminder');
+                    }
+                    editor.fire('change');
+                }
+                hidePopover();
+                location.reload();
+            }
+        } catch (error) {
+            console.error('Error setting reminder:', error);
+        }
+    });
+});
 
 /**
  * Creates a new journal entry under a work item.

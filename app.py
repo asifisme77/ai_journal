@@ -64,16 +64,37 @@ class JournalEntry(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    markers = db.relationship('Marker', backref='entry', cascade='all, delete-orphan')
 
     def to_dict(self):
+        active_markers = [m.to_dict() for m in self.markers if m.state == 'OPEN']
         return {
             'id': self.id,
             'work_item_id': self.work_item_id,
             'title': self.title,
             'content': self.content,
-            'created_at': self.created_at.isoformat()
+            'created_at': self.created_at.isoformat(),
+            'markers': active_markers
         }
 
+class Marker(db.Model):
+    """A span of text highlighted as a marker within a journal entry, optionally with a reminder."""
+    id = db.Column(db.Integer, primary_key=True)
+    entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=False)
+    text = db.Column(db.Text, nullable=True)
+    state = db.Column(db.String(20), default='OPEN') # 'OPEN' or 'CLOSED'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reminder_due_date = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'entry_id': self.entry_id,
+            'text': self.text,
+            'state': self.state,
+            'created_at': self.created_at.isoformat(),
+            'reminder_due_date': self.reminder_due_date.isoformat() if self.reminder_due_date else None
+        }
 
 # Create tables on startup
 with app.app_context():
@@ -180,6 +201,63 @@ def delete_entry(entry_id):
     db.session.delete(entry)
     db.session.commit()
     return '', 204
+
+# ============================================================================
+# ROUTES: Markers
+# ============================================================================
+
+@app.route('/api/entries/<int:entry_id>/markers', methods=['POST'])
+def create_marker(entry_id):
+    """Create a new marker inside a journal entry."""
+    entry = JournalEntry.query.get_or_404(entry_id)
+    data = request.json
+    
+    new_marker = Marker(
+        entry_id=entry.id,
+        text=data.get('text', ''),
+        state='OPEN'
+    )
+    if data.get('reminder_due_date'):
+        new_marker.reminder_due_date = datetime.fromisoformat(data['reminder_due_date'])
+
+    db.session.add(new_marker)
+    db.session.commit()
+    return jsonify(new_marker.to_dict()), 201
+
+@app.route('/api/markers/<int:marker_id>', methods=['PUT'])
+def update_marker(marker_id):
+    """Update a marker's state or reminder."""
+    marker = Marker.query.get_or_404(marker_id)
+    data = request.json
+
+    if 'state' in data:
+        marker.state = data['state']
+    
+    if 'reminder_due_date' in data:
+        if data['reminder_due_date'] is None:
+            marker.reminder_due_date = None
+        else:
+            try:
+                marker.reminder_due_date = datetime.fromisoformat(data['reminder_due_date'].replace('Z', '+00:00'))
+            except ValueError:
+                marker.reminder_due_date = datetime.fromisoformat(data['reminder_due_date'])
+
+    db.session.commit()
+    return jsonify(marker.to_dict())
+
+@app.route('/api/markers/reminders', methods=['GET'])
+def get_reminders():
+    """Get all open markers."""
+    markers = Marker.query.filter(
+        Marker.state == 'OPEN'
+    ).order_by(Marker.created_at.asc()).all()
+    
+    return jsonify([{
+        **marker.to_dict(),
+        'entry_title': marker.entry.title,
+        'work_item_heading': marker.entry.work_item.heading,
+        'work_item_id': marker.entry.work_item_id
+    } for marker in markers])
 
 # ============================================================================
 # ROUTES: Search

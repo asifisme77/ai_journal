@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js" referrerpolicy="origin"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=24">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=29">
 </head>
 
 <body>
@@ -49,7 +49,11 @@
                         <button id="search-apply" class="btn-primary btn-small">Apply Filters</button>
                     </div>
                 </div>
+            <h2><i class="ph ph-push-pin"></i> Markers</h2>
+            <div id="reminders-container">
+                <div class="loading-state">No active markers.</div>
             </div>
+
             <h2><i class="ph ph-clock"></i> Timeline</h2>
             <div id="timeline-container">
                 <div class="loading-state"><i class="ph ph-spinner ph-spin"></i> Loading...</div>
@@ -76,7 +80,24 @@
         </main>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=7"></script>
+    <!-- Global Marker Popover -->
+    <div id="marker-popover" class="marker-popover hidden">
+        <div class="marker-popover-header">
+            <span>Marker Options</span>
+            <button class="btn-close" id="marker-popover-close"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="marker-popover-body">
+            <button id="marker-btn-close" class="btn-danger btn-small" style="width: 100%; margin-bottom: 0.5rem;"><i class="ph ph-trash"></i> Close Marker</button>
+            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 0.5rem 0;">
+            <div class="reminder-section">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem; display: block;">Set Reminder</label>
+                <input type="datetime-local" id="marker-reminder-input" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.25rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.75rem;" />
+                <button id="marker-btn-reminder" class="btn-primary btn-small" style="width: 100%;"><i class="ph ph-bell"></i> Save Reminder</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=8"></script>
 </body>
 
 </html>

@@ -233,15 +233,6 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    position: sticky;
-    top: 3.5rem; /* Matches height of collapsed search bar */
-    background: #1e293b; /* Solid color to prevent overlapping text */
-    z-index: 10;
-    margin-left: -1rem;
-    margin-right: -1rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 0.5rem;
 }
 
 .main-column {
@@ -1226,4 +1217,194 @@ details.timeline-date>summary {
 .entry-toolbar-container .tox-tbtn__select-label {
     font-size: 10px !important;
     font-weight: 600;
+}
+
+/* ==========================================================================
+   MARKERS, POPUPS, AND REMINDERS
+   ========================================================================== */
+
+.marker-open {
+    border-bottom: 2px solid #facc15;
+    background-color: rgba(250, 204, 21, 0.15);
+    position: relative;
+    border-radius: 2px;
+}
+.marker-bubble {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    background-color: #facc15;
+    color: #000;
+    border-radius: 50%;
+    margin-left: 2px;
+    font-size: 9px;
+    cursor: pointer;
+    vertical-align: super;
+}
+.marker-bubble:hover {
+    background-color: #eab308;
+    transform: scale(1.1);
+}
+.marker-bubble.has-reminder {
+    background-color: var(--danger-color);
+    color: #fff;
+}
+.marker-bubble.has-reminder:hover {
+    background-color: #ef4444; 
+}
+
+/* Marker Popover */
+.marker-popover {
+    position: fixed;
+    z-index: 2000;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 220px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+}
+
+.marker-popover.hidden {
+    display: none;
+}
+
+.marker-popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-weight: 600;
+    font-size: 0.8rem;
+    background: rgba(0,0,0,0.2);
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.marker-popover-body {
+    padding: 0.75rem;
+}
+
+.btn-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+}
+
+.btn-close:hover {
+    color: var(--danger-color);
+}
+
+/* Timeline Markers */
+.timeline-markers {
+    margin-top: 0.4rem;
+    margin-left: 0.5rem;
+    border-left: 1px dashed rgba(255, 255, 255, 0.2);
+    padding-left: 0.5rem;
+}
+
+.timeline-marker-details summary {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-bottom: 0.2rem;
+}
+
+.timeline-marker-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    transition: background 0.2s;
+}
+.timeline-marker-item:hover {
+    background: rgba(250, 204, 21, 0.1);
+    color: var(--text-primary);
+}
+.timeline-marker-bubble {
+    width: 8px;
+    height: 8px;
+    background-color: #facc15;
+    border-radius: 50%;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+.timeline-marker-bubble.has-reminder {
+    background-color: var(--danger-color);
+}
+.timeline-marker-text {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* Reminders List */
+#reminders-container {
+    padding: 0 1rem 1.5rem 1rem;
+    margin-top: 0.5rem;
+}
+
+.reminder-item {
+    background: rgba(250, 204, 21, 0.05);
+    border-left: 3px solid #facc15;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.reminder-item.has-reminder {
+    border-left-color: var(--danger-color);
+    background: rgba(248, 113, 113, 0.05);
+}
+
+.reminder-item:hover {
+    background: rgba(250, 204, 21, 0.15);
+}
+.reminder-item.has-reminder:hover {
+    background: rgba(248, 113, 113, 0.15);
+}
+
+.reminder-item-text {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reminder-item-meta {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.reminder-item-time {
+    color: #facc15;
+    font-weight: 600;
+}
+.reminder-item.has-reminder .reminder-item-time {
+    color: var(--danger-color);
 }
