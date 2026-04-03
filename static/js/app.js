@@ -203,7 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item.entries && item.entries.length > 0) {
             item.entries.forEach((entry, index) => {
                 const isLast = index === item.entries.length - 1;
-                entriesContainer.appendChild(createEntryElement(entry, isLast));
+                // Default: only the last entry is expanded
+                entriesContainer.appendChild(createEntryElement(entry, isLast, isLast));
             });
         } else {
             entriesContainer.innerHTML = `
@@ -413,6 +414,29 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('timeline-container').innerHTML = '<div class="loading-state" style="color:#ef4444">Search error.</div>';
         }
     }
+
+    window.fetchItems = fetchItems;
+    window.fetchReminders = fetchReminders;
+
+    /**
+     * Refreshes only the sidebar components (Reminders & Timeline)
+     * without re-rendering the main task list (preserving editor state).
+     */
+    window.refreshSidebar = async () => {
+        fetchReminders();
+        try {
+            const res = await fetch('/api/items');
+            const items = await res.json();
+            window.allItemsData = items;
+            const timelineContainer = document.getElementById('timeline-container');
+            if (timelineContainer) {
+                timelineContainer.innerHTML = '';
+                renderTimeline(items);
+            }
+        } catch (error) {
+            console.error('Error refreshing sidebar:', error);
+        }
+    };
 });
 
 // ============================================================================
@@ -577,11 +601,12 @@ function initResizableLogBlockColumns(editor) {
  * Creates a journal entry DOM element with an inline TinyMCE editor.
  * @param {Object} entry - Entry data from the API
  * @param {boolean} isLast - Whether this is the last entry (shows the + button)
+ * @param {boolean} initiallyExpanded - Whether the entry starts expanded
  * @returns {HTMLElement} The entry DOM element
  */
-function createEntryElement(entry, isLast = false) {
+function createEntryElement(entry, isLast = false, initiallyExpanded = false) {
     const entryDiv = document.createElement('div');
-    entryDiv.className = 'journal-entry expanded';
+    entryDiv.className = `journal-entry ${initiallyExpanded ? 'expanded' : ''}`;
     entryDiv.dataset.entryId = entry.id;
 
     const dateObj = parseUTCDate(entry.created_at);
@@ -690,6 +715,7 @@ function initTinyMCE(entry) {
                             const currentHtml = editor.selection.getContent();
                             editor.selection.setContent(`<span class="marker marker-open" data-marker-id="${marker.id}">${currentHtml}</span><span class="marker-bubble" data-marker-id="${marker.id}" contenteditable="false" title="Marker Options">M</span>&nbsp;`);
                             editor.fire('change');
+                            if (window.refreshSidebar) window.refreshSidebar();
                         }
                     } catch (error) {
                         console.error('Error adding marker:', error);
@@ -709,7 +735,16 @@ function initTinyMCE(entry) {
              */
             function updateOutliner() {
                 // Include all common block-level elements to handle styled content
-                const blocks = editor.dom.select('p, h1, h2, h3, h4, h5, h6, li, details, div, blockquote, pre, section, article, aside');
+                const rawBlocks = Array.from(editor.dom.select('p, h1, h2, h3, h4, h5, h6, li, details, div, blockquote, pre, section, article, aside'));
+                
+                // Only evaluate leaf blocks (blocks that don't contain other blocks) to avoid double-parsing wrappers
+                const blocks = rawBlocks.filter(b => {
+                    for (let c of rawBlocks) {
+                        if (c !== b && b.contains(c)) return false;
+                    }
+                    return true;
+                });
+
                 let hideThreshold = Infinity;
 
                 for (let i = 0; i < blocks.length; i++) {
@@ -718,14 +753,21 @@ function initTinyMCE(entry) {
 
                     // Determine if this block is a collapsible parent
                     let isParent = false;
-                    if (i + 1 < blocks.length) {
-                        const nextIndent = getOutlinerIndent(editor, blocks[i + 1]);
-                        if (nextIndent > currentIndent) {
-                            // Skip blank/empty lines — they shouldn't show a collapse chevron
-                            const textContent = (block.textContent || '').replace(/[\s\u00a0]/g, '');
-                            if (textContent.length > 0) {
-                                isParent = true;
+                    const textContent = (block.textContent || '').replace(/[\s\u00A0\u200B\u200E\u200F\uFEFF]/g, '');
+                    
+                    if (textContent.length > 0) {
+                        // Look ahead for the next non-blank block to compare indentation
+                        let nextIndent = -1;
+                        for (let j = i + 1; j < blocks.length; j++) {
+                            const nextTc = (blocks[j].textContent || '').replace(/[\s\u00A0\u200B\u200E\u200F\uFEFF]/g, '');
+                            if (nextTc.length > 0) {
+                                nextIndent = getOutlinerIndent(editor, blocks[j]);
+                                break;
                             }
+                        }
+                        
+                        if (nextIndent > currentIndent) {
+                            isParent = true;
                         }
                     }
 
@@ -737,7 +779,7 @@ function initTinyMCE(entry) {
                         editor.dom.removeClass(block, 'collapsed');
                     }
 
-                    // Apply collapse visibility: blocks deeper than a collapsed parent are hidden
+                    // Apply collapse visibility
                     if (currentIndent <= hideThreshold) {
                         hideThreshold = Infinity;
                     }
@@ -1091,9 +1133,52 @@ function initTinyMCE(entry) {
 
             editor.on('keydown', function(event) {
                 if (event.keyCode === 9) {
-                    editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
                     event.preventDefault();
                     event.stopPropagation();
+                    
+                    // Preemptively split <br> separated lines into distinct block tags 
+                    // before applying indent to prevent TinyMCE from shifting unselected lines
+                    if (!event.shiftKey) {
+                        const selectedBlocks = editor.selection.getSelectedBlocks();
+                        let modified = false;
+
+                        // Start a transaction so moveToBookmark can track across any nodes we split
+                        editor.undoManager.transact(() => {
+                            const bookmark = editor.selection.getBookmark(2, true);
+                            
+                            selectedBlocks.forEach(block => {
+                                // Prevent this logic from touching the editor container or table elements
+                                if (block && block !== editor.getBody() && block.nodeName !== 'BODY' && block.nodeName !== 'TABLE' && block.nodeName !== 'TD' && block.nodeName !== 'TH' && !editor.dom.getParent(block, 'table')) {
+                                    const brs = Array.from(block.querySelectorAll('br')).filter(br => !br.getAttribute('data-mce-bogus'));
+                                    if (brs.length > 0) {
+                                        let html = block.innerHTML;
+                                        const outerTag = block.nodeName.toLowerCase();
+                                        
+                                        let blockStyles = block.getAttribute('style') || '';
+                                        let attrString = '';
+                                        if (blockStyles) attrString += ` style="${blockStyles}"`;
+                                        
+                                        // Drop internal outliner state classes for the new clones
+                                        let cleanClass = (block.className || '').replace(/parent-node|hidden-by-collapse|collapsed/g, '').trim();
+                                        if (cleanClass) attrString += ` class="${cleanClass}"`;
+                                        
+                                        // Remove bogus tags first to avoid trailing empty blocks
+                                        let newHtml = html.replace(/<br\s+data-mce-bogus="1"[^>]*>/gi, '');
+                                        newHtml = newHtml.replace(/<br\s*\/?>/gi, `</${outerTag}><${outerTag}${attrString}>`);
+                                        
+                                        block.outerHTML = `<${outerTag}${attrString}>${newHtml}</${outerTag}>`;
+                                        modified = true;
+                                    }
+                                }
+                            });
+
+                            if (modified) {
+                                editor.selection.moveToBookmark(bookmark);
+                            }
+                        });
+                    }
+
+                    editor.execCommand(event.shiftKey ? 'Outdent' : 'Indent');
                     return false;
                 }
             });
@@ -1156,23 +1241,33 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (res.ok) {
-                // Remove Bubble
-                editor.dom.remove(bubble);
+                // Remove all associated bubbles (handles potential duplicates)
+                const bubbles = editor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`);
+                bubbles.forEach(b => editor.dom.remove(b));
                 
-                // Unwrap Span
-                const markerSpan = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`)[0];
-                if (markerSpan) {
-                    while (markerSpan.firstChild) {
-                        markerSpan.parentNode.insertBefore(markerSpan.firstChild, markerSpan);
-                    }
-                    markerSpan.parentNode.removeChild(markerSpan);
+                // Unwrap all associated spans (handles potential duplicates)
+                const markerSpans = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`);
+                markerSpans.forEach(span => {
+                    editor.dom.remove(span, true); // true = keep children (unwrap)
+                });
+                
+                // Force sync save directly to DB before reloading the page!
+                // The auto-save debounce takes 2s and would be terminated by reload.
+                const entryId = editor.id.split('-')[1];
+                if (entryId) {
+                    const currentContent = editor.getContent();
+                    await fetch(`/api/entries/${entryId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: currentContent })
+                    });
                 }
                 
                 editor.fire('change');
                 hidePopover();
                 
-                // Refresh items to clear closed markers from timeline
-                location.reload(); 
+                // Refresh sidebar dynamically instead of full page reload
+                if (window.refreshSidebar) window.refreshSidebar();
             }
         } catch (error) {
             console.error('Error closing marker:', error);
@@ -1201,10 +1296,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         bubble.classList.remove('has-reminder');
                     }
+                    
+                    const entryId = editor.id.split('-')[1];
+                    if (entryId) {
+                        await fetch(`/api/entries/${entryId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: editor.getContent() })
+                        });
+                    }
+                    
                     editor.fire('change');
                 }
                 hidePopover();
-                location.reload();
+                if (window.refreshSidebar) window.refreshSidebar();
             }
         } catch (error) {
             console.error('Error setting reminder:', error);
@@ -1238,7 +1343,8 @@ window.addEntry = async function(itemId) {
             const addFirstBtn = entriesContainer.querySelector('.btn-ghost');
             if (addFirstBtn) addFirstBtn.parentElement.remove();
 
-            entriesContainer.appendChild(createEntryElement(newEntry, true));
+            // Newly added entries are always expanded
+            entriesContainer.appendChild(createEntryElement(newEntry, true, true));
 
             // Auto-expand the parent work item
             const workItem = document.querySelector(`.work-item[data-id="${itemId}"]`);
@@ -1404,6 +1510,11 @@ window.focusEntry = function(entryId, isArchived, itemId) {
     setTimeout(() => {
         const entryEl = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
         if (entryEl) {
+            // Ensure entry is expanded when focused
+            if (!entryEl.classList.contains('expanded')) {
+                entryEl.classList.add('expanded');
+            }
+            
             entryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             entryEl.classList.add('highlight-pulse');
             setTimeout(() => entryEl.classList.remove('highlight-pulse'), 2000);
