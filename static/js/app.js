@@ -26,6 +26,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial data load
     fetchItems();
+    initResizableSidebar();
+    initSidebarSections();
+
+    /**
+     * Initializes collapsible sidebar section headers.
+     */
+    function initSidebarSections() {
+        document.querySelectorAll('.sidebar-section-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                // Don't toggle when clicking buttons inside the header
+                if (e.target.closest('button')) return;
+                header.closest('.sidebar-section').classList.toggle('open');
+            });
+        });
+    }
 
     // ---------- New Work Item Form ----------
     addItemForm.addEventListener('submit', async (e) => {
@@ -53,7 +68,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ---------- Fetch & Render All Items ----------
+    /**
+     * Initializes the resizable sidebar logic.
+     */
+    function initResizableSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        const resizer = document.getElementById('sidebar-resizer');
+        if (!sidebar || !resizer) return;
+
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (event) => {
+            isResizing = true;
+            document.body.classList.add('body-resizing'); // Consistent with CSS
+            
+            // Prevent pointer events on the iframe/editors while resizing to avoid focus issues
+            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
+            
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', stopResizing);
+        });
+
+        function handleMouseMove(event) {
+            if (!isResizing) return;
+            
+            // Width is based on viewport mouse position
+            let newWidth = event.clientX;
+            
+            // Constrain limits
+            if (newWidth < 200) newWidth = 200;
+            if (newWidth > 800) newWidth = 800;
+            
+            sidebar.style.width = `${newWidth}px`;
+            
+            // If the sidebar is too narrow, we might want to hide some overflow or truncate text
+            // But usually the width control is enough
+        }
+
+        function stopResizing() {
+            if (!isResizing) return;
+            isResizing = false;
+            document.body.classList.remove('body-resizing');
+            
+            // Re-enable pointer events
+            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
+            
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', stopResizing);
+        }
+    }
 
     /**
      * Fetches all reminders from API and displays them.
@@ -72,18 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
             
             reminders.forEach(marker => {
                 let timeStr = '';
-                let hasReminder = false;
+                let isOverdue = false;
                 if (marker.reminder_due_date) {
                     const dateObj = parseUTCDate(marker.reminder_due_date);
-                    timeStr = '<i class="ph ph-bell-ringing"></i> ' + dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                    hasReminder = true;
+                    isOverdue = dateObj < new Date();
+                    const icon = isOverdue ? '<i class="ph ph-warning-circle overdue-icon"></i>' : '<i class="ph ph-bell-ringing"></i>';
+                    timeStr = `${icon} ${dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
                 } else {
                     const dateObj = parseUTCDate(marker.created_at);
                     timeStr = '<i class="ph ph-clock"></i> ' + dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
                 }
                 
                 const div = document.createElement('div');
-                div.className = `reminder-item ${hasReminder ? 'has-reminder' : ''}`;
+                div.className = `reminder-item ${isOverdue ? 'has-reminder is-overdue' : ''}`;
                 div.innerHTML = `
                     <div class="reminder-item-text" title="${escapeHtml(marker.text)}">"${escapeHtml(marker.text)}"</div>
                     <div class="reminder-item-meta">
@@ -91,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="reminder-item-time">${timeStr}</span>
                     </div>
                 `;
-                div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id);
+                div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id, marker.id);
                 container.appendChild(div);
             });
         } catch (error) {
@@ -100,15 +164,341 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Fetches all MEMO items and folders, renders the Memos sidebar section.
+     */
+    async function fetchMemos() {
+        try {
+            const res = await fetch('/api/memo-folders');
+            const data = await res.json();
+            const container = document.getElementById('memos-container');
+            container.innerHTML = '';
+
+            const { folders, root_memos } = data;
+
+            if (folders.length === 0 && root_memos.length === 0) {
+                container.innerHTML = '<div class="loading-state">No memos yet.</div>';
+                return;
+            }
+
+            // We need a flattened list of folders for the buildMemoItem dropdowns
+            const allFoldersFlattened = [];
+            function flatten(folderList) {
+                folderList.forEach(f => {
+                    allFoldersFlattened.push(f);
+                    if (f.children) flatten(f.children);
+                });
+            }
+            flatten(folders);
+
+            // Build a path map: folder id -> "Parent > Sub > Sub" breadcrumb
+            const pathMap = {};
+            function buildPaths(folderList, parentPath) {
+                folderList.forEach(f => {
+                    const thisPath = parentPath ? parentPath + ' › ' + f.name : f.name;
+                    pathMap[f.id] = thisPath;
+                    if (f.children) buildPaths(f.children, thisPath);
+                });
+            }
+            buildPaths(folders, '');
+
+            // Recursive function to render a folder and its children/items
+            function renderFolder(folder, targetContainer) {
+                const folderEl = document.createElement('div');
+                folderEl.className = 'memo-folder';
+                folderEl.dataset.folderId = folder.id;
+
+                folderEl.innerHTML = `
+                    <div class="memo-folder-header" data-folder-id="${folder.id}">
+                        <i class="ph ph-caret-down memo-folder-caret"></i>
+                        <i class="ph ph-folder memo-folder-icon"></i>
+                        <span class="memo-folder-name" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</span>
+                        <div class="memo-folder-actions">
+                            <button class="memo-folder-add-sub-btn" title="New subfolder" data-folder-id="${folder.id}">
+                                <i class="ph ph-folder-plus"></i>
+                            </button>
+                            <button class="memo-folder-delete-btn" title="Delete folder" data-folder-id="${folder.id}">
+                                <i class="ph ph-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="memo-folder-content">
+                        <div class="memo-folder-children"></div>
+                        <div class="memo-folder-items"></div>
+                    </div>
+                `;
+
+                const contentEl = folderEl.querySelector('.memo-folder-content');
+                const childrenContainer = folderEl.querySelector('.memo-folder-children');
+                const itemsContainer = folderEl.querySelector('.memo-folder-items');
+
+                // Render subfolders
+                if (folder.children && folder.children.length > 0) {
+                    folder.children.forEach(child => renderFolder(child, childrenContainer));
+                }
+
+                // Render items
+                if (folder.items && folder.items.length > 0) {
+                    folder.items.forEach(item => {
+                        itemsContainer.appendChild(buildMemoItem(item, allFoldersFlattened, pathMap));
+                    });
+                } else if (!folder.children || folder.children.length === 0) {
+                    itemsContainer.innerHTML = '<div class="memo-empty-folder">Empty</div>';
+                }
+
+                // Toggle collapse
+                folderEl.querySelector('.memo-folder-header').addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    folderEl.classList.toggle('collapsed');
+                });
+
+                // --- Drag-and-drop: folder as a drop target ---
+                const headerEl = folderEl.querySelector('.memo-folder-header');
+                headerEl.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    headerEl.classList.add('memo-drop-target');
+                    // Auto-expand collapsed folder on hover
+                    if (folderEl.classList.contains('collapsed')) {
+                        folderEl.classList.remove('collapsed');
+                    }
+                });
+                headerEl.addEventListener('dragleave', (e) => {
+                    headerEl.classList.remove('memo-drop-target');
+                });
+                headerEl.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    headerEl.classList.remove('memo-drop-target');
+                    const draggedItemId = e.dataTransfer.getData('text/memo-item-id');
+                    if (!draggedItemId) return;
+                    await fetch(`/api/items/${draggedItemId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ memo_folder_id: folder.id })
+                    });
+                    fetchMemos();
+                });
+
+                // Add subfolder
+                folderEl.querySelector('.memo-folder-add-sub-btn').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const row = document.getElementById('memo-new-folder-row');
+                    const input = document.getElementById('memo-new-folder-input');
+                    row.dataset.parentId = folder.id;
+                    input.placeholder = `Subfolder in "${folder.name}"...`;
+                    row.classList.remove('hidden');
+                    input.focus();
+                });
+
+                // Delete folder
+                folderEl.querySelector('.memo-folder-delete-btn').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`Delete folder "${folder.name}"? Everything inside will be moved up or deleted.`)) return;
+                    await fetch(`/api/memo-folders/${folder.id}`, { method: 'DELETE' });
+                    fetchMemos();
+                });
+
+                targetContainer.appendChild(folderEl);
+            }
+
+            // Render root folders
+            folders.forEach(folder => renderFolder(folder, container));
+
+            // Render root-level memos
+            if (root_memos.length > 0) {
+                root_memos.forEach(item => {
+                    container.appendChild(buildMemoItem(item, allFoldersFlattened, pathMap));
+                });
+            }
+
+            // --- Drag-and-drop: memos-container as root drop target ---
+            container.addEventListener('dragover', (e) => {
+                // Only show root drop zone when not hovering over a folder header
+                if (!e.target.closest('.memo-folder-header')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    container.classList.add('memo-root-drop-target');
+                }
+            });
+            container.addEventListener('dragleave', (e) => {
+                // Only remove if actually leaving the container
+                if (!container.contains(e.relatedTarget)) {
+                    container.classList.remove('memo-root-drop-target');
+                }
+            });
+            container.addEventListener('drop', async (e) => {
+                container.classList.remove('memo-root-drop-target');
+                // Don't handle if dropped on a folder header (that handler takes priority)
+                if (e.target.closest('.memo-folder-header')) return;
+                e.preventDefault();
+                const draggedItemId = e.dataTransfer.getData('text/memo-item-id');
+                if (!draggedItemId) return;
+                await fetch(`/api/items/${draggedItemId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ memo_folder_id: null })
+                });
+                fetchMemos();
+            });
+
+        } catch (error) {
+            console.error('Error fetching memos:', error);
+        }
+    }
+
+    /**
+     * Builds a single memo sidebar item element with drag-and-drop folder assignment.
+     */
+    function buildMemoItem(item, folders, pathMap) {
+        const el = document.createElement('div');
+        el.className = 'memo-item';
+        el.dataset.itemId = item.id;
+        el.draggable = true;
+
+        // Build path + date meta line
+        const dateObj = parseUTCDate(item.created_at);
+        const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const folderPath = (pathMap && item.memo_folder_id && pathMap[item.memo_folder_id]) ? pathMap[item.memo_folder_id] : '';
+        const pathHtml = folderPath
+            ? `<span class="memo-item-path" title="${escapeHtml(folderPath)}"><i class="ph ph-folder-open"></i> ${escapeHtml(folderPath)}</span>`
+            : '';
+
+        el.innerHTML = `
+            <div class="memo-item-inner">
+                <i class="ph ph-dots-six-vertical memo-drag-handle"></i>
+                <i class="ph ph-note memo-item-icon"></i>
+                <div class="memo-item-body">
+                    <span class="memo-item-title" title="${escapeHtml(item.heading)}">${escapeHtml(item.heading)}</span>
+                    <div class="memo-item-meta">
+                        <span class="memo-item-date"><i class="ph ph-clock"></i> ${dateStr}</span>
+                        ${pathHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // --- Drag-and-drop: make memo item draggable ---
+        el.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/memo-item-id', String(item.id));
+            e.dataTransfer.effectAllowed = 'move';
+            el.classList.add('memo-item-dragging');
+            // Highlight all valid drop targets
+            document.querySelectorAll('.memo-folder-header').forEach(h => h.classList.add('memo-drop-hint'));
+            document.getElementById('memos-container').classList.add('memo-drop-hint-root');
+        });
+        el.addEventListener('dragend', () => {
+            el.classList.remove('memo-item-dragging');
+            // Remove all drop target highlights
+            document.querySelectorAll('.memo-folder-header').forEach(h => h.classList.remove('memo-drop-hint', 'memo-drop-target'));
+            document.getElementById('memos-container').classList.remove('memo-drop-hint-root', 'memo-root-drop-target');
+        });
+
+        // Click title to navigate to last entry
+        el.querySelector('.memo-item-title').addEventListener('click', () => {
+            if (item.entries && item.entries.length > 0) {
+                const lastEntry = item.entries[item.entries.length - 1];
+                const itemDateStr = parseUTCDate(item.created_at).toDateString();
+                const isToday = itemDateStr === new Date().toDateString();
+                // Archived if: state is DONE OR (state is MEMO AND not created today)
+                const isArchived = item.state === 'DONE' || (item.state === 'MEMO' && !isToday);
+                window.focusEntry(lastEntry.id, isArchived, item.id);
+            }
+        });
+
+        return el;
+    }
+
+    // ---- New Folder creation UI ----
+    document.getElementById('memo-add-folder-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const sectionEl = e.target.closest('.sidebar-section');
+        if (sectionEl) sectionEl.classList.add('open');
+        
+        const row = document.getElementById('memo-new-folder-row');
+        const input = document.getElementById('memo-new-folder-input');
+        row.dataset.parentId = '';
+        input.placeholder = 'Folder name...';
+        row.classList.remove('hidden');
+        input.focus();
+    });
+
+    document.getElementById('memo-new-folder-cancel').addEventListener('click', () => {
+        const row = document.getElementById('memo-new-folder-row');
+        const input = document.getElementById('memo-new-folder-input');
+        row.classList.add('hidden');
+        row.dataset.parentId = '';
+        input.value = '';
+        input.placeholder = 'Folder name...';
+    });
+
+    document.getElementById('memo-new-folder-save').addEventListener('click', async () => {
+        const input = document.getElementById('memo-new-folder-input');
+        const row = document.getElementById('memo-new-folder-row');
+        const name = input.value.trim();
+        if (!name) return;
+        
+        const payload = { name };
+        if (row.dataset.parentId) {
+            payload.parent_id = parseInt(row.dataset.parentId, 10);
+        }
+        
+        const res = await fetch('/api/memo-folders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            // Show error inline on the input
+            input.classList.add('memo-folder-input-error');
+            input.placeholder = err.error || 'Folder name already exists';
+            input.value = '';
+            input.focus();
+            setTimeout(() => input.classList.remove('memo-folder-input-error'), 1500);
+            return;
+        }
+        
+        input.value = '';
+        input.placeholder = 'Folder name...';
+        row.dataset.parentId = '';
+        row.classList.add('hidden');
+        fetchMemos();
+    });
+
+    document.getElementById('memo-new-folder-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('memo-new-folder-save').click();
+        if (e.key === 'Escape') document.getElementById('memo-new-folder-cancel').click();
+    });
+
+    /**
      * Fetches all work items from the API and renders them.
      * Active items (not DONE, or MEMO from today) go to the main column.
      * All items feed into the timeline sidebar.
      */
     async function fetchItems() {
         fetchReminders();
+        fetchMemos();
         try {
-            const res = await fetch('/api/items');
-            const items = await res.json();
+            const [itemsRes, foldersRes] = await Promise.all([
+                fetch('/api/items'),
+                fetch('/api/memo-folders')
+            ]);
+            const items = await itemsRes.json();
+            const folderData = await foldersRes.json();
+
+            // Build folder path map: folder id -> "Parent › Sub › Sub"
+            const folderPathMap = {};
+            function buildPaths(folderList, parentPath) {
+                folderList.forEach(f => {
+                    const thisPath = parentPath ? parentPath + ' › ' + f.name : f.name;
+                    folderPathMap[f.id] = thisPath;
+                    if (f.children) buildPaths(f.children, thisPath);
+                });
+            }
+            buildPaths(folderData.folders || [], '');
+            window.folderPathMap = folderPathMap;
 
             // Store globally for the archived-item focus flow
             window.allItemsData = items;
@@ -159,13 +549,20 @@ document.addEventListener('DOMContentLoaded', () => {
             + ' at '
             + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+        // Build folder path for MEMO items
+        let folderPathHtml = '';
+        if (item.state === 'MEMO' && item.memo_folder_id && window.folderPathMap && window.folderPathMap[item.memo_folder_id]) {
+            const path = window.folderPathMap[item.memo_folder_id];
+            folderPathHtml = `<span class="work-item-folder-path" title="${escapeHtml(path)}"><i class="ph ph-folder-open"></i> ${escapeHtml(path)}</span>`;
+        }
+
         div.innerHTML = `
             <div class="work-item-header">
                 <div class="work-item-title-group">
                     <i class="ph ph-caret-down toggle-icon"></i>
                     <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; margin-right: 1rem;">
                         <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)" onclick="event.stopPropagation()">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; font-weight: normal;"><i class="ph ph-clock"></i> ${timeStr}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0;"><i class="ph ph-clock"></i> ${timeStr}${folderPathHtml}</div>
                     </div>
                 </div>
                 <div class="item-actions" onclick="event.stopPropagation()">
@@ -694,6 +1091,134 @@ function initTinyMCE(entry) {
         setup: function(editor) {
 
             // ================================================================
+            // LINK: Simplified Prompt (Replaces heavy dialog)
+            // ================================================================
+
+            // Track right-click position so we can anchor the link popover near it
+            let _lastContextMenuPos = { x: 0, y: 0 };
+            editor.on('contextmenu', function(e) {
+                _lastContextMenuPos = { x: e.clientX, y: e.clientY };
+            });
+            // Also track toolbar Ctrl+K
+            editor.on('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    const rng = editor.selection.getRng();
+                    const rect = rng.getBoundingClientRect();
+                    if (rect.width || rect.height) {
+                        _lastContextMenuPos = { x: rect.left, y: rect.bottom };
+                    }
+                }
+            });
+
+            editor.addCommand('mceLink', function() {
+                const node = editor.selection.getNode();
+                let existingUrl = '';
+                let existingAnchor = null;
+
+                // If cursor is inside a link, pre-populate with existing URL
+                if (node && node.nodeName === 'A') {
+                    existingAnchor = node;
+                    existingUrl = editor.dom.getAttrib(node, 'href');
+                } else {
+                    existingAnchor = editor.dom.getParent(node, 'a');
+                    if (existingAnchor) existingUrl = editor.dom.getAttrib(existingAnchor, 'href');
+                }
+
+                // Save selection bookmark before opening modal (modal loses focus)
+                const bookmark = editor.selection.getBookmark(2, true);
+
+                const overlay = document.createElement('div');
+                overlay.id = 'link-modal-overlay';
+                overlay.innerHTML = `
+                    <div class="link-modal" id="link-modal-panel">
+                        <div class="link-modal-body">
+                            <input type="url" id="link-modal-input" class="link-modal-input" 
+                                   placeholder="Paste or type a URL..." 
+                                   value="${existingUrl || ''}" />
+                        </div>
+                        <div class="link-modal-footer">
+                            <button id="link-modal-cancel" class="btn-secondary btn-small">Cancel</button>
+                            <button id="link-modal-submit" class="btn-primary btn-small"><i class="ph ph-link"></i> Insert</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                // Position near right-click / selection using stored coords
+                const modal = overlay.querySelector('#link-modal-panel');
+                requestAnimationFrame(() => {
+                    const MARGIN = 8;
+                    const modalW = modal.offsetWidth;
+                    const modalH = modal.offsetHeight;
+                    const vw = window.innerWidth;
+                    const vh = window.innerHeight;
+
+                    // Anchor just below the right-click point
+                    let top = _lastContextMenuPos.y + MARGIN;
+                    let left = _lastContextMenuPos.x;
+
+                    // Flip above if it would overflow the bottom
+                    if (top + modalH > vh - MARGIN) top = _lastContextMenuPos.y - modalH - MARGIN;
+                    // Clamp horizontal
+                    if (left + modalW > vw - MARGIN) left = vw - modalW - MARGIN;
+                    if (left < MARGIN) left = MARGIN;
+                    // Clamp vertical
+                    if (top < MARGIN) top = MARGIN;
+
+                    modal.style.position = 'fixed';
+                    modal.style.top = top + 'px';
+                    modal.style.left = left + 'px';
+                });
+
+                const input = overlay.querySelector('#link-modal-input');
+                input.focus();
+                input.select();
+
+                const cleanup = () => {
+                    overlay.remove();
+                    editor.selection.moveToBookmark(bookmark);
+                    editor.focus();
+                };
+
+                const insertLink = () => {
+                    const rawUrl = input.value.trim();
+                    if (!rawUrl) {
+                        if (existingAnchor) {
+                            editor.selection.moveToBookmark(bookmark);
+                            editor.execCommand('unlink');
+                        }
+                        cleanup();
+                        return;
+                    }
+                    // Normalize URL — prepend https:// if no protocol given
+                    const finalUrl = /^(https?:\/\/|mailto:|ftp:\/\/|\/|#)/.test(rawUrl)
+                        ? rawUrl
+                        : 'https://' + rawUrl;
+
+                    editor.selection.moveToBookmark(bookmark);
+
+                    if (existingAnchor) {
+                        editor.dom.setAttrib(existingAnchor, 'href', finalUrl);
+                    } else {
+                        const selectedContent = editor.selection.getContent();
+                        const linkHtml = `<a href="${finalUrl}" target="_blank">${selectedContent || finalUrl}</a>`;
+                        editor.selection.setContent(linkHtml);
+                    }
+
+                    editor.fire('change');
+                    cleanup();
+                };
+
+                overlay.querySelector('#link-modal-submit').addEventListener('click', insertLink);
+                overlay.querySelector('#link-modal-cancel').addEventListener('click', cleanup);
+                overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) cleanup(); });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); insertLink(); }
+                    if (e.key === 'Escape') cleanup();
+                });
+            });
+
+            // ================================================================
             // MARKER: Context Menu Integration
             // ================================================================
 
@@ -1004,6 +1529,15 @@ function initTinyMCE(entry) {
             // ================================================================
 
             editor.on('click', function(e) {
+                // --- Regular link: open on Ctrl+Click (inline editor blocks native clicks) ---
+                const regularLink = editor.dom.getParent(e.target, 'a:not(.embedded-file)');
+                if (regularLink && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    const href = editor.dom.getAttrib(regularLink, 'href');
+                    if (href) window.open(href, '_blank');
+                    return;
+                }
+
                 // --- Embedded file links: open natively on Windows ---
                 const embeddedLink = editor.dom.getParent(e.target, 'a.embedded-file');
                 if (embeddedLink) {
@@ -1480,8 +2014,9 @@ window.deleteItem = async function(id) {
 /**
  * Focuses a specific journal entry, scrolling to it and pulsing a highlight.
  * If the entry belongs to a DONE/archived item, renders it in the archived section.
+ * If markerId is provided, moves the cursor to the end of the marker span in the editor.
  */
-window.focusEntry = function(entryId, isArchived, itemId) {
+window.focusEntry = function(entryId, isArchived, itemId, markerId = null) {
     if (isArchived) {
         const archivedContainer = document.getElementById('archived-container');
         const existingItem = archivedContainer.querySelector(`.work-item[data-id="${itemId}"]`);
@@ -1490,7 +2025,6 @@ window.focusEntry = function(entryId, isArchived, itemId) {
             const itemObj = window.allItemsData.find(i => i.id === itemId);
             if (itemObj) {
                 document.getElementById('archived-header').style.display = 'flex';
-                // Dispatch event to renderItem (which is scoped inside DOMContentLoaded)
                 document.dispatchEvent(new CustomEvent('RenderArchivedItem', {
                     detail: { itemObj, container: archivedContainer }
                 }));
@@ -1510,17 +2044,44 @@ window.focusEntry = function(entryId, isArchived, itemId) {
     setTimeout(() => {
         const entryEl = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
         if (entryEl) {
-            // Ensure entry is expanded when focused
             if (!entryEl.classList.contains('expanded')) {
                 entryEl.classList.add('expanded');
             }
-            
+
             entryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             entryEl.classList.add('highlight-pulse');
             setTimeout(() => entryEl.classList.remove('highlight-pulse'), 2000);
 
             const editor = tinymce.get(`tinymce-${entryId}`);
-            if (editor) editor.focus();
+            if (editor) {
+                editor.focus();
+
+                // If a markerId is given, place the cursor at the end of that marker span
+                if (markerId) {
+                    const markerSpan = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`)[0];
+                    if (markerSpan) {
+                        // Scroll the marker into view inside the editor
+                        markerSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                        // Place cursor at the END of the marker span
+                        const range = editor.dom.createRng();
+                        range.setStartAfter(markerSpan);
+                        range.setEndAfter(markerSpan);
+                        editor.selection.setRng(range);
+                    }
+                }
+            }
         }
     }, 200);
 };
+
+/**
+ * Generic escape HTML function for labels/titles
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+

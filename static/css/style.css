@@ -20,6 +20,7 @@
     --task-header-bg: rgba(30, 41, 59, 0.8);
     --entry-header-bg: rgba(51, 65, 85, 0.4);
     --editor-bg: rgba(15, 23, 42, 0.6);
+}
 
 * {
     box-sizing: border-box;
@@ -46,7 +47,7 @@ body {
     margin: 0 auto;
     padding: 1rem 0.5rem;
     display: flex;
-    gap: 2rem;
+    gap: 0;
     align-items: flex-start;
 }
 
@@ -225,14 +226,40 @@ body {
     margin-top: 0.25rem;
 }
 
+/* Sidebar Collapsible Sections */
+.sidebar-section-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sidebar-section-caret {
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.sidebar-section.open .sidebar-section-caret {
+    transform: rotate(90deg);
+}
+
+.sidebar-section-content {
+    display: none;
+}
+
+.sidebar-section.open .sidebar-section-content {
+    display: block;
+    padding-top: 0.75rem;
+}
+
 .sidebar h2 {
     font-size: 1.1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    width: 100%;
 }
 
 .main-column {
@@ -330,7 +357,7 @@ body {
 .items-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.3rem;
 }
 
 .work-item {
@@ -371,7 +398,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.5rem 0.75rem;
+    padding: 0.35rem 0.6rem;
     cursor: pointer;
     user-select: none;
     background: var(--task-header-bg);
@@ -475,12 +502,12 @@ body {
 
 .content-inner {
     overflow: hidden;
-    padding: 0 0.5rem;
+    padding: 0 0.4rem;
     border-top: 1px solid transparent;
 }
 
 .work-item.expanded .content-inner {
-    padding: 0.5rem;
+    padding: 0.3rem 0.4rem;
     border-top-color: var(--border-color);
     overflow: visible;
 }
@@ -512,21 +539,21 @@ body {
 
 /* Journal Entries */
 .entries-container {
-    padding: 0.5rem 0 0 0;
+    padding: 0.3rem 0 0 0;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
     border-left: 2px solid rgba(255, 255, 255, 0.1);
-    padding-left: 0.5rem;
-    margin-left: 0.5rem;
+    padding-left: 0.4rem;
+    margin-left: 0.4rem;
 }
 
 .journal-entry {
     background: transparent;
     border: none;
     padding: 0;
-    margin-left: 1rem;
+    margin-left: 0.5rem;
     position: relative;
 }
 
@@ -545,8 +572,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.25rem;
-    padding: 0.25rem 0.5rem;
+    margin-bottom: 0.15rem;
+    padding: 0.15rem 0.4rem;
     background: var(--entry-header-bg);
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -593,6 +620,20 @@ body {
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
     color: var(--text-primary);
 }
+
+.work-item-folder-path {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.6rem;
+    color: rgba(148, 163, 184, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding-left: 0.4rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .entry-date {
@@ -631,7 +672,7 @@ body {
 }
 
 .journal-entry.expanded .entry-content-inner {
-    padding: 0.25rem 0;
+    padding: 0.15rem 0;
     overflow: visible;
 }
 
@@ -1378,16 +1419,29 @@ details.timeline-date>summary {
     transition: all 0.2s;
 }
 
-.reminder-item.has-reminder {
+.reminder-item.is-overdue {
     border-left-color: var(--danger-color);
-    background: rgba(248, 113, 113, 0.05);
+    background: rgba(239, 68, 68, 0.08);
+    animation: overdue-pulse 2s infinite alternate ease-in-out;
+    border-left-width: 4px;
+}
+
+@keyframes overdue-pulse {
+    0% {
+        background: rgba(239, 68, 68, 0.08);
+        box-shadow: inset 0 0 0 transparent;
+    }
+    100% {
+        background: rgba(239, 68, 68, 0.15);
+        box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.1);
+    }
 }
 
 .reminder-item:hover {
     background: rgba(250, 204, 21, 0.15);
 }
-.reminder-item.has-reminder:hover {
-    background: rgba(248, 113, 113, 0.15);
+.reminder-item.is-overdue:hover {
+    background: rgba(239, 68, 68, 0.2);
 }
 
 .reminder-item-text {
@@ -1409,7 +1463,427 @@ details.timeline-date>summary {
 .reminder-item-time {
     color: #facc15;
     font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
 }
-.reminder-item.has-reminder .reminder-item-time {
+.reminder-item.is-overdue .reminder-item-time {
     color: var(--danger-color);
+}
+
+/* --- SIDEBAR RESIZER --- */
+.sidebar-resizer {
+    width: 12px;
+    margin: 0 -3px; /* Slightly overlap for better hit area */
+    cursor: col-resize;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: background 0.2s;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.sidebar-resizer:hover, .body-resizing .sidebar-resizer {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.sidebar-resizer::after {
+    content: '';
+    width: 2px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+.body-resizing {
+    cursor: col-resize !important;
+}
+
+.body-resizing * {
+    user-select: none !important;
+}
+.overdue-icon {
+    font-size: 0.85rem;
+    animation: overdue-shake 0.5s infinite;
+}
+
+@keyframes overdue-shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+/* Memos Section */
+#memos-container {
+    padding: 0 1rem 1.5rem 1rem;
+    margin-top: 0.5rem;
+}
+
+.memo-folder {
+    margin-bottom: 0.4rem;
+}
+
+.memo-folder-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.memo-folder-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.memo-folder-caret {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+}
+
+.memo-folder.collapsed .memo-folder-caret {
+    transform: rotate(-90deg);
+}
+
+.memo-folder-icon {
+    font-size: 1rem;
+    color: #3b82f6;
+}
+
+.memo-folder-name {
+    flex-grow: 1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.memo-folder-actions {
+    display: none;
+    gap: 0.3rem;
+    margin-left: auto;
+}
+
+.memo-folder-header:hover .memo-folder-actions {
+    display: flex;
+}
+
+.memo-folder-add-sub-btn, .memo-folder-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px;
+    border-radius: 3px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.memo-folder-add-sub-btn:hover { color: var(--primary-color); background: rgba(59, 130, 246, 0.1); }
+.memo-folder-delete-btn:hover { color: var(--danger-color); background: rgba(239, 68, 68, 0.1); }
+
+.memo-folder-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.memo-folder.collapsed .memo-folder-content {
+    display: none;
+}
+
+.memo-folder-children {
+    padding-left: 0.8rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    margin-left: 0.4rem;
+}
+
+.memo-folder-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-left: 0.8rem;
+}
+
+.memo-item {
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.memo-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.memo-item-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
+
+.memo-item-icon {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.memo-item-body {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.memo-item-title {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.memo-item-title:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
+.memo-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6rem;
+    color: rgba(148, 163, 184, 0.6);
+    line-height: 1.2;
+    min-width: 0;
+}
+
+.memo-item-date {
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.memo-item-path {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.55rem;
+    letter-spacing: -0.02em;
+    color: rgba(148, 163, 184, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+/* Drag Handle */
+.memo-drag-handle {
+    font-size: 0.75rem;
+    color: rgba(148, 163, 184, 0.3);
+    cursor: grab;
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+.memo-item:hover .memo-drag-handle {
+    color: rgba(148, 163, 184, 0.7);
+}
+.memo-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Dragging State */
+.memo-item-dragging {
+    opacity: 0.4;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 4px;
+}
+
+/* Drop Target Hint (shown on all folders while dragging) */
+.memo-drop-hint {
+    outline: 1px dashed rgba(59, 130, 246, 0.3);
+    outline-offset: -1px;
+    border-radius: 4px;
+}
+
+/* Active Drop Target (when hovering over a folder) */
+.memo-drop-target {
+    background: rgba(59, 130, 246, 0.15) !important;
+    outline: 2px solid rgba(59, 130, 246, 0.6) !important;
+    outline-offset: -2px;
+    border-radius: 4px;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+.memo-drop-target .memo-folder-icon {
+    color: #60a5fa !important;
+    animation: folder-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes folder-pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.15); }
+}
+
+/* Root drop zone hint */
+.memo-drop-hint-root {
+    position: relative;
+}
+.memo-drop-hint-root::after {
+    content: 'Drop here for root level';
+    display: block;
+    text-align: center;
+    font-size: 0.65rem;
+    color: rgba(59, 130, 246, 0.6);
+    border: 1px dashed rgba(59, 130, 246, 0.3);
+    border-radius: 4px;
+    padding: 0.4rem;
+    margin-top: 0.4rem;
+    pointer-events: none;
+}
+.memo-root-drop-target {
+    background: rgba(59, 130, 246, 0.05);
+    border-radius: 4px;
+}
+.memo-root-drop-target::after {
+    border-color: rgba(59, 130, 246, 0.6) !important;
+    color: rgba(59, 130, 246, 0.9) !important;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.memo-empty-folder {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 0.2rem 0.5rem;
+}
+
+.memo-add-folder-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    font-size: 1rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+}
+
+.memo-add-folder-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.memo-new-folder-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.5rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.memo-folder-input {
+    flex-grow: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    outline: none;
+}
+
+.memo-folder-input-error {
+    border-color: var(--danger-color) !important;
+    animation: shake 0.3s ease-in-out;
+    color: var(--danger-color) !important;
+}
+.memo-folder-input-error::placeholder {
+    color: var(--danger-color);
+    opacity: 0.8;
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   LINK INSERTION MODAL (near-text popover)
+   ========================================================================== */
+
+#link-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    z-index: 99999;
+}
+
+.link-modal {
+    background: var(--surface-1, #1e1e2e);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    width: 320px;
+    max-width: 90vw;
+    overflow: hidden;
+    animation: slideUp 0.12s ease;
+}
+
+.link-modal-body {
+    padding: 0.6rem 0.75rem 0.4rem;
+}
+
+.link-modal-input {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    color: var(--text-primary);
+    padding: 0.4rem 0.6rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-sizing: border-box;
+}
+
+.link-modal-input:focus {
+    border-color: var(--primary-color, #7c3aed);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.22);
+}
+
+.link-modal-footer {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    padding: 0.4rem 0.75rem 0.6rem;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
 }

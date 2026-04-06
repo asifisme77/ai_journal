@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js" referrerpolicy="origin"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=29">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=42">
 </head>
 
 <body>
@@ -49,16 +49,49 @@
                         <button id="search-apply" class="btn-primary btn-small">Apply Filters</button>
                     </div>
                 </div>
-            <h2><i class="ph ph-push-pin"></i> Markers</h2>
-            <div id="reminders-container">
-                <div class="loading-state">No active markers.</div>
             </div>
 
-            <h2><i class="ph ph-clock"></i> Timeline</h2>
-            <div id="timeline-container">
-                <div class="loading-state"><i class="ph ph-spinner ph-spin"></i> Loading...</div>
+            <div class="sidebar-section open">
+                <div class="sidebar-section-header">
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-push-pin"></i> Markers</h2>
+                </div>
+                <div class="sidebar-section-content">
+                    <div id="reminders-container">
+                        <div class="loading-state">No active markers.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section open">
+                <div class="sidebar-section-header">
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-note"></i> Memos
+                        <button id="memo-add-folder-btn" title="New folder" class="memo-add-folder-btn"><i class="ph ph-folder-plus"></i></button>
+                    </h2>
+                </div>
+                <div class="sidebar-section-content">
+                    <div id="memo-new-folder-row" class="memo-new-folder-row hidden">
+                        <input type="text" id="memo-new-folder-input" placeholder="Folder name..." class="memo-folder-input" />
+                        <button id="memo-new-folder-save" class="btn-primary btn-small">Save</button>
+                        <button id="memo-new-folder-cancel" class="btn-secondary btn-small">✕</button>
+                    </div>
+                    <div id="memos-container">
+                        <div class="loading-state">No memos yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section open">
+                <div class="sidebar-section-header">
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-clock"></i> Timeline</h2>
+                </div>
+                <div class="sidebar-section-content">
+                    <div id="timeline-container">
+                        <div class="loading-state"><i class="ph ph-spinner ph-spin"></i> Loading...</div>
+                    </div>
+                </div>
             </div>
         </aside>
+        <div class="sidebar-resizer" id="sidebar-resizer"></div>
 
         <main class="main-column">
             <section class="add-item-section glass-panel" style="margin-bottom: 1rem;">
@@ -97,7 +130,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=8"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
 </body>
 
 </html>

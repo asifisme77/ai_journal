@@ -45,6 +45,7 @@ class WorkItem(db.Model):
     heading = db.Column(db.String(200), nullable=False)
     state = db.Column(db.String(20), default='TODO')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    memo_folder_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id'), nullable=True)
     entries = db.relationship('JournalEntry', backref='work_item', cascade='all, delete-orphan')
 
     def to_dict(self):
@@ -53,6 +54,7 @@ class WorkItem(db.Model):
             'heading': self.heading,
             'state': self.state,
             'created_at': self.created_at.isoformat(),
+            'memo_folder_id': self.memo_folder_id,
             'entries': [entry.to_dict() for entry in self.entries]
         }
 
@@ -96,6 +98,25 @@ class Marker(db.Model):
             'reminder_due_date': self.reminder_due_date.isoformat() if self.reminder_due_date else None
         }
 
+class MemoFolder(db.Model):
+    """A named folder for organizing MEMO work items in the sidebar."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    parent_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id', ondelete='CASCADE'), nullable=True)
+    
+    items = db.relationship('WorkItem', backref='folder', lazy=True)
+    children = db.relationship('MemoFolder', backref=db.backref('parent', remote_side=[id]), lazy=True, cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'parent_id': self.parent_id,
+            'created_at': self.created_at.isoformat()
+        }
+
+
 # Create tables on startup
 with app.app_context():
     db.create_all()
@@ -136,7 +157,7 @@ def create_item():
 
 @app.route('/api/items/<int:item_id>', methods=['PUT'])
 def update_item(item_id):
-    """Update a work item's heading and/or state."""
+    """Update a work item's heading, state, and/or memo folder."""
     item = WorkItem.query.get_or_404(item_id)
     data = request.json
 
@@ -144,6 +165,10 @@ def update_item(item_id):
         item.heading = data['heading']
     if 'state' in data:
         item.state = data['state']
+    if 'memo_folder_id' in data:
+        folder_id = data['memo_folder_id']
+        if folder_id is None or MemoFolder.query.get(folder_id):
+            item.memo_folder_id = folder_id
 
     db.session.commit()
     return jsonify(item.to_dict())
@@ -154,6 +179,68 @@ def delete_item(item_id):
     """Delete a work item and all its entries (cascade)."""
     item = WorkItem.query.get_or_404(item_id)
     db.session.delete(item)
+    db.session.commit()
+    return '', 204
+
+
+# ============================================================================
+# ROUTES: Memo Folders
+# ============================================================================
+
+@app.route('/api/memo-folders', methods=['GET'])
+def get_memo_folders():
+    """List all memo folders in a hierarchical structure with their items."""
+    def build_tree(parent_id=None):
+        folders = MemoFolder.query.filter_by(parent_id=parent_id).order_by(MemoFolder.created_at.asc()).all()
+        result = []
+        for folder in folders:
+            f = folder.to_dict()
+            f['items'] = [item.to_dict() for item in folder.items if item.state == 'MEMO']
+            f['children'] = build_tree(folder.id)
+            result.append(f)
+        return result
+
+    # Root-level items (memos with no folder)
+    root_memos = WorkItem.query.filter_by(state='MEMO', memo_folder_id=None).order_by(WorkItem.created_at.desc()).all()
+    
+    return jsonify({
+        'folders': build_tree(None),
+        'root_memos': [item.to_dict() for item in root_memos]
+    })
+
+
+@app.route('/api/memo-folders', methods=['POST'])
+def create_memo_folder():
+    """Create a new memo folder, optionally under a parent folder."""
+    data = request.json
+    name = (data.get('name') or '').strip()
+    parent_id = data.get('parent_id')
+    
+    if not name:
+        return jsonify({'error': 'Folder name is required'}), 400
+    
+    # Enforce unique folder names within the same parent (case-insensitive)
+    existing = MemoFolder.query.filter(
+        db.func.lower(MemoFolder.name) == name.lower(),
+        MemoFolder.parent_id == parent_id
+    ).first()
+    if existing:
+        return jsonify({'error': f'A folder named "{existing.name}" already exists here'}), 409
+    
+    folder = MemoFolder(name=name, parent_id=parent_id)
+    db.session.add(folder)
+    db.session.commit()
+    return jsonify(folder.to_dict()), 201
+
+
+@app.route('/api/memo-folders/<int:folder_id>', methods=['DELETE'])
+def delete_memo_folder(folder_id):
+    """Delete a memo folder. Memos inside move back to root (folder_id = NULL)."""
+    folder = MemoFolder.query.get_or_404(folder_id)
+    # Unassign all items in this folder
+    for item in folder.items:
+        item.memo_folder_id = None
+    db.session.delete(folder)
     db.session.commit()
     return '', 204
 
