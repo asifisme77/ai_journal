@@ -81,26 +81,26 @@ document.addEventListener('DOMContentLoaded', () => {
         resizer.addEventListener('mousedown', (event) => {
             isResizing = true;
             document.body.classList.add('body-resizing'); // Consistent with CSS
-            
+
             // Prevent pointer events on the iframe/editors while resizing to avoid focus issues
             document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
-            
+
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', stopResizing);
         });
 
         function handleMouseMove(event) {
             if (!isResizing) return;
-            
+
             // Width is based on viewport mouse position
             let newWidth = event.clientX;
-            
+
             // Constrain limits
             if (newWidth < 200) newWidth = 200;
             if (newWidth > 800) newWidth = 800;
-            
+
             sidebar.style.width = `${newWidth}px`;
-            
+
             // If the sidebar is too narrow, we might want to hide some overflow or truncate text
             // But usually the width control is enough
         }
@@ -109,10 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isResizing) return;
             isResizing = false;
             document.body.classList.remove('body-resizing');
-            
+
             // Re-enable pointer events
             document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
-            
+
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', stopResizing);
         }
@@ -127,12 +127,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const reminders = await res.json();
             const container = document.getElementById('reminders-container');
             container.innerHTML = '';
-            
+
             if (reminders.length === 0) {
                 container.innerHTML = '<div class="loading-state">No active reminders.</div>';
                 return;
             }
-            
+
             reminders.forEach(marker => {
                 let timeStr = '';
                 let isOverdue = false;
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dateObj = parseUTCDate(marker.created_at);
                     timeStr = '<i class="ph ph-clock"></i> ' + dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
                 }
-                
+
                 const div = document.createElement('div');
                 div.className = `reminder-item ${isOverdue ? 'has-reminder is-overdue' : ''}`;
                 div.innerHTML = `
@@ -414,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.stopPropagation();
         const sectionEl = e.target.closest('.sidebar-section');
         if (sectionEl) sectionEl.classList.add('open');
-        
+
         const row = document.getElementById('memo-new-folder-row');
         const input = document.getElementById('memo-new-folder-input');
         row.dataset.parentId = '';
@@ -437,18 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.getElementById('memo-new-folder-row');
         const name = input.value.trim();
         if (!name) return;
-        
+
         const payload = { name };
         if (row.dataset.parentId) {
             payload.parent_id = parseInt(row.dataset.parentId, 10);
         }
-        
+
         const res = await fetch('/api/memo-folders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        
+
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             // Show error inline on the input
@@ -459,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => input.classList.remove('memo-folder-input-error'), 1500);
             return;
         }
-        
+
         input.value = '';
         input.placeholder = 'Folder name...';
         row.dataset.parentId = '';
@@ -692,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const entryDiv = document.createElement('div');
                         entryDiv.className = `timeline-item ${stateClass} ${isArchived ? 'timeline-item-archived' : ''}`;
-                        
+
                         let markersHTML = '';
                         if (entry.markers && entry.markers.length > 0) {
                             markersHTML = `<details class="timeline-marker-details" onclick="event.stopPropagation()">
@@ -901,7 +901,7 @@ function getOutlinerIndent(editor, block) {
 function initResizableLogBlockColumns(editor) {
     const logBlocks = editor.dom.select('details.log-block');
 
-    logBlocks.forEach(function(logBlock) {
+    logBlocks.forEach(function (logBlock) {
         const table = editor.dom.select('table', logBlock)[0];
         if (!table) return;
 
@@ -914,13 +914,13 @@ function initResizableLogBlockColumns(editor) {
         const numCols = cells.length;
 
         // Force equal column widths initially
-        cells.forEach(function(cell) {
+        cells.forEach(function (cell) {
             cell.style.width = (100 / numCols) + '%';
         });
 
         // Set all cells to have explicit widths
-        rows.forEach(function(row) {
-            editor.dom.select('td, th', row).forEach(function(cell, idx) {
+        rows.forEach(function (row) {
+            editor.dom.select('td, th', row).forEach(function (cell, idx) {
                 if (!cell.style.width) {
                     cell.style.width = (100 / numCols) + '%';
                 }
@@ -929,7 +929,7 @@ function initResizableLogBlockColumns(editor) {
     });
 
     // Add mousedown handler to the editor's entire content area
-    editor.on('mousedown', function(e) {
+    editor.on('mousedown', function (e) {
         const cell = editor.dom.getParent(e.target, 'td,th');
         if (!cell) return;
 
@@ -966,7 +966,7 @@ function initResizableLogBlockColumns(editor) {
 
         // Get all cells in this column
         const colCells = [];
-        tableRows.forEach(function(row) {
+        tableRows.forEach(function (row) {
             const cells = editor.dom.select('td,th', row);
             if (cells[cellIndex]) {
                 colCells.push(cells[cellIndex]);
@@ -976,7 +976,7 @@ function initResizableLogBlockColumns(editor) {
         function onMouseMove(e) {
             const diff = e.clientX - startX;
             const newWidth = Math.max(30, startWidth + diff);
-            colCells.forEach(function(cell) {
+            colCells.forEach(function (cell) {
                 cell.style.width = newWidth + 'px';
             });
         }
@@ -1032,7 +1032,7 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false) {
             </div>
         </div>
     `;
-    
+
     // Create floating toolbar container (positioned outside entry structure)
     const toolbarContainer = document.createElement('div');
     toolbarContainer.id = `toolbar-${entry.id}`;
@@ -1088,7 +1088,7 @@ function initTinyMCE(entry) {
         table_column_resizing: true,
         table_use_colgroups: false,
 
-        setup: function(editor) {
+        setup: function (editor) {
 
             // ================================================================
             // LINK: Simplified Prompt (Replaces heavy dialog)
@@ -1096,11 +1096,11 @@ function initTinyMCE(entry) {
 
             // Track right-click position so we can anchor the link popover near it
             let _lastContextMenuPos = { x: 0, y: 0 };
-            editor.on('contextmenu', function(e) {
+            editor.on('contextmenu', function (e) {
                 _lastContextMenuPos = { x: e.clientX, y: e.clientY };
             });
             // Also track toolbar Ctrl+K
-            editor.on('keydown', function(e) {
+            editor.on('keydown', function (e) {
                 if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
                     const rng = editor.selection.getRng();
                     const rect = rng.getBoundingClientRect();
@@ -1110,7 +1110,7 @@ function initTinyMCE(entry) {
                 }
             });
 
-            editor.addCommand('mceLink', function() {
+            editor.addCommand('mceLink', function () {
                 const node = editor.selection.getNode();
                 let existingUrl = '';
                 let existingAnchor = null;
@@ -1225,8 +1225,8 @@ function initTinyMCE(entry) {
             editor.ui.registry.addMenuItem('addmarker', {
                 text: 'Add Marker',
                 icon: 'highlight-bg-color',
-                onAction: async function() {
-                    const selectedText = editor.selection.getContent({format: 'text'});
+                onAction: async function () {
+                    const selectedText = editor.selection.getContent({ format: 'text' });
                     if (!selectedText) return;
 
                     try {
@@ -1261,7 +1261,7 @@ function initTinyMCE(entry) {
             function updateOutliner() {
                 // Include all common block-level elements to handle styled content
                 const rawBlocks = Array.from(editor.dom.select('p, h1, h2, h3, h4, h5, h6, li, details, div, blockquote, pre, section, article, aside'));
-                
+
                 // Only evaluate leaf blocks (blocks that don't contain other blocks) to avoid double-parsing wrappers
                 const blocks = rawBlocks.filter(b => {
                     for (let c of rawBlocks) {
@@ -1279,7 +1279,7 @@ function initTinyMCE(entry) {
                     // Determine if this block is a collapsible parent
                     let isParent = false;
                     const textContent = (block.textContent || '').replace(/[\s\u00A0\u200B\u200E\u200F\uFEFF]/g, '');
-                    
+
                     if (textContent.length > 0) {
                         // Look ahead for the next non-blank block to compare indentation
                         let nextIndent = -1;
@@ -1290,7 +1290,7 @@ function initTinyMCE(entry) {
                                 break;
                             }
                         }
-                        
+
                         if (nextIndent > currentIndent) {
                             isParent = true;
                         }
@@ -1355,7 +1355,7 @@ function initTinyMCE(entry) {
             editor.on('blur', () => {
                 clearTimeout(saveTimeout);
                 triggerSave();
-                
+
                 // Hide toolbar on blur
                 const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
                 if (toolbarEl) {
@@ -1380,11 +1380,11 @@ function initTinyMCE(entry) {
             // EDITOR INIT: Migrations & initial state
             // ================================================================
 
-            editor.on('init', function() {
+            editor.on('init', function () {
                 // Migration: strip <code> wrappers from legacy log blocks
                 // (old log blocks used <pre><code>..., which TinyMCE auto-selects on click)
                 const codeEls = editor.dom.select('details.log-block pre code');
-                codeEls.forEach(function(codeEl) {
+                codeEls.forEach(function (codeEl) {
                     const parent = codeEl.parentNode;
                     while (codeEl.firstChild) {
                         parent.insertBefore(codeEl.firstChild, codeEl);
@@ -1398,7 +1398,7 @@ function initTinyMCE(entry) {
             });
 
             // Initialize resizable columns on content changes
-            editor.on('SetContent', function() {
+            editor.on('SetContent', function () {
                 initResizableLogBlockColumns(editor);
             });
 
@@ -1413,7 +1413,7 @@ function initTinyMCE(entry) {
             editor.ui.registry.addButton('collapsible', {
                 icon: 'chevron-down',
                 tooltip: 'Insert Collapsible Log Block',
-                onAction: function() {
+                onAction: function () {
                     const node = editor.selection.getNode();
                     const block = editor.dom.getParent(node, editor.dom.isBlock);
                     let indent = 0;
@@ -1444,7 +1444,7 @@ function initTinyMCE(entry) {
             editor.ui.registry.addButton('embedfile', {
                 icon: 'upload',
                 tooltip: 'Embed File or Image',
-                onAction: function() {
+                onAction: function () {
                     const fileInput = document.createElement('input');
                     fileInput.type = 'file';
                     fileInput.onchange = async (e) => {
@@ -1482,7 +1482,7 @@ function initTinyMCE(entry) {
             editor.ui.registry.addButton('removeformatwithindent', {
                 icon: 'remove-formatting',
                 tooltip: 'Clear Formatting',
-                onAction: function() {
+                onAction: function () {
                     const node = editor.selection.getNode();
                     const block = editor.dom.getParent(node, editor.dom.isBlock);
 
@@ -1499,7 +1499,7 @@ function initTinyMCE(entry) {
 
                         // Also remove any remaining links specifically
                         const links = editor.dom.select('a');
-                        links.forEach(function(link) {
+                        links.forEach(function (link) {
                             const text = link.textContent || link.innerText;
                             editor.dom.replace(editor.dom.create('span', {}, text), link);
                         });
@@ -1516,7 +1516,7 @@ function initTinyMCE(entry) {
 
                         // Also remove any remaining links specifically
                         const links = editor.dom.select('a');
-                        links.forEach(function(link) {
+                        links.forEach(function (link) {
                             const text = link.textContent || link.innerText;
                             editor.dom.replace(editor.dom.create('span', {}, text), link);
                         });
@@ -1528,7 +1528,7 @@ function initTinyMCE(entry) {
             // CLICK HANDLERS: Embedded files, log blocks, outliner toggles
             // ================================================================
 
-            editor.on('click', function(e) {
+            editor.on('click', function (e) {
                 // --- Regular link: open on Ctrl+Click (inline editor blocks native clicks) ---
                 const regularLink = editor.dom.getParent(e.target, 'a:not(.embedded-file)');
                 if (regularLink && (e.ctrlKey || e.metaKey)) {
@@ -1556,10 +1556,10 @@ function initTinyMCE(entry) {
                 if (e.target.classList && e.target.classList.contains('marker-bubble')) {
                     e.preventDefault();
                     e.stopPropagation();
-                    
+
                     const markerId = e.target.getAttribute('data-marker-id');
                     const rect = e.target.getBoundingClientRect();
-                    
+
                     window.openMarkerPopover(markerId, rect.left, rect.bottom, editor, e.target);
                     return false;
                 }
@@ -1622,7 +1622,7 @@ function initTinyMCE(entry) {
             let tableInsertIndent = 0;
 
             // Capture current indent before table insertion
-            editor.on('BeforeExecCommand', function(e) {
+            editor.on('BeforeExecCommand', function (e) {
                 if (e.command === 'mceInsertTable') {
                     const node = editor.selection.getNode();
                     const block = editor.dom.getParent(node, editor.dom.isBlock);
@@ -1637,7 +1637,7 @@ function initTinyMCE(entry) {
             });
 
             // Apply indent to newly inserted table and ensure trailing paragraph
-            editor.on('ExecCommand', function(e) {
+            editor.on('ExecCommand', function (e) {
                 if (e.command === 'mceInsertTable' && tableInsertIndent > 0) {
                     const node = editor.selection.getNode();
                     const tableNode = editor.dom.getParent(node, 'TABLE');
@@ -1665,11 +1665,26 @@ function initTinyMCE(entry) {
             // KEYBOARD: Tab key for indent/outdent
             // ================================================================
 
-            editor.on('keydown', function(event) {
+            editor.on('keydown', function (event) {
                 if (event.keyCode === 9) {
                     event.preventDefault();
                     event.stopPropagation();
-                    
+
+                    // Focus/indent handling for Collapsible Log Blocks
+                    const node = editor.selection.getNode();
+                    const logBlock = editor.dom.getParent(node, 'details.log-block');
+                    if (logBlock) {
+                        let currentIndent = parseInt(editor.dom.getStyle(logBlock, 'margin-left') || 0, 10);
+                        if (!event.shiftKey) {
+                            editor.dom.setStyle(logBlock, 'margin-left', (currentIndent + 20) + 'px');
+                        } else {
+                            if (currentIndent >= 20) {
+                                editor.dom.setStyle(logBlock, 'margin-left', (currentIndent - 20) + 'px');
+                            }
+                        }
+                        return false;
+                    }
+
                     // Preemptively split <br> separated lines into distinct block tags 
                     // before applying indent to prevent TinyMCE from shifting unselected lines
                     if (!event.shiftKey) {
@@ -1679,27 +1694,27 @@ function initTinyMCE(entry) {
                         // Start a transaction so moveToBookmark can track across any nodes we split
                         editor.undoManager.transact(() => {
                             const bookmark = editor.selection.getBookmark(2, true);
-                            
+
                             selectedBlocks.forEach(block => {
-                                // Prevent this logic from touching the editor container or table elements
-                                if (block && block !== editor.getBody() && block.nodeName !== 'BODY' && block.nodeName !== 'TABLE' && block.nodeName !== 'TD' && block.nodeName !== 'TH' && !editor.dom.getParent(block, 'table')) {
+                                // Prevent this logic from touching the editor container, tables, or pre tags
+                                if (block && block !== editor.getBody() && block.nodeName !== 'BODY' && block.nodeName !== 'TABLE' && block.nodeName !== 'TD' && block.nodeName !== 'TH' && block.nodeName !== 'PRE' && !editor.dom.getParent(block, 'table')) {
                                     const brs = Array.from(block.querySelectorAll('br')).filter(br => !br.getAttribute('data-mce-bogus'));
                                     if (brs.length > 0) {
                                         let html = block.innerHTML;
                                         const outerTag = block.nodeName.toLowerCase();
-                                        
+
                                         let blockStyles = block.getAttribute('style') || '';
                                         let attrString = '';
                                         if (blockStyles) attrString += ` style="${blockStyles}"`;
-                                        
+
                                         // Drop internal outliner state classes for the new clones
                                         let cleanClass = (block.className || '').replace(/parent-node|hidden-by-collapse|collapsed/g, '').trim();
                                         if (cleanClass) attrString += ` class="${cleanClass}"`;
-                                        
+
                                         // Remove bogus tags first to avoid trailing empty blocks
                                         let newHtml = html.replace(/<br\s+data-mce-bogus="1"[^>]*>/gi, '');
                                         newHtml = newHtml.replace(/<br\s*\/?>/gi, `</${outerTag}><${outerTag}${attrString}>`);
-                                        
+
                                         block.outerHTML = `<${outerTag}${attrString}>${newHtml}</${outerTag}>`;
                                         modified = true;
                                     }
@@ -1726,16 +1741,16 @@ function initTinyMCE(entry) {
 
 let currentMarkerContext = null;
 
-window.openMarkerPopover = function(markerId, x, y, editorInstance, bubbleElement) {
+window.openMarkerPopover = function (markerId, x, y, editorInstance, bubbleElement) {
     const popover = document.getElementById('marker-popover');
     if (!popover) return;
-    
+
     currentMarkerContext = { markerId, editor: editorInstance, bubble: bubbleElement };
-    
+
     popover.style.left = `${x}px`;
     popover.style.top = `${y + 10}px`;
     popover.classList.remove('hidden');
-    
+
     document.getElementById('marker-reminder-input').value = '';
 };
 
@@ -1778,13 +1793,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Remove all associated bubbles (handles potential duplicates)
                 const bubbles = editor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`);
                 bubbles.forEach(b => editor.dom.remove(b));
-                
+
                 // Unwrap all associated spans (handles potential duplicates)
                 const markerSpans = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`);
                 markerSpans.forEach(span => {
                     editor.dom.remove(span, true); // true = keep children (unwrap)
                 });
-                
+
                 // Force sync save directly to DB before reloading the page!
                 // The auto-save debounce takes 2s and would be terminated by reload.
                 const entryId = editor.id.split('-')[1];
@@ -1796,10 +1811,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         body: JSON.stringify({ content: currentContent })
                     });
                 }
-                
+
                 editor.fire('change');
                 hidePopover();
-                
+
                 // Refresh sidebar dynamically instead of full page reload
                 if (window.refreshSidebar) window.refreshSidebar();
             }
@@ -1813,7 +1828,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentMarkerContext) return;
         const { markerId, editor, bubble } = currentMarkerContext;
         const dateVal = reminderInput.value;
-        
+
         const payload = { reminder_due_date: dateVal ? new Date(dateVal).toISOString() : null };
 
         try {
@@ -1830,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         bubble.classList.remove('has-reminder');
                     }
-                    
+
                     const entryId = editor.id.split('-')[1];
                     if (entryId) {
                         await fetch(`/api/entries/${entryId}`, {
@@ -1839,7 +1854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             body: JSON.stringify({ content: editor.getContent() })
                         });
                     }
-                    
+
                     editor.fire('change');
                 }
                 hidePopover();
@@ -1855,7 +1870,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Creates a new journal entry under a work item.
  * Removes existing "+" buttons, appends the new entry, and auto-expands the item.
  */
-window.addEntry = async function(itemId) {
+window.addEntry = async function (itemId) {
     const now = new Date();
     const dateTitle = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
         + ' at '
@@ -1892,7 +1907,7 @@ window.addEntry = async function(itemId) {
 };
 
 /** Updates a journal entry's title via the API. */
-window.updateEntryTitle = async function(entryId, newTitle) {
+window.updateEntryTitle = async function (entryId, newTitle) {
     try {
         await fetch(`/api/entries/${entryId}`, {
             method: 'PUT',
@@ -1905,7 +1920,7 @@ window.updateEntryTitle = async function(entryId, newTitle) {
 };
 
 /** Updates a work item's heading via the API. */
-window.updateItemHeading = async function(id, newHeading) {
+window.updateItemHeading = async function (id, newHeading) {
     if (!newHeading.trim()) return;
     try {
         await fetch(`/api/items/${id}`, {
@@ -1923,7 +1938,7 @@ window.updateItemHeading = async function(id, newHeading) {
  * Handles DOM cleanup: removes the entry, reassigns the "+" button to the new
  * last entry, or shows the "Add First Entry" button if no entries remain.
  */
-window.deleteEntry = async function(entryId) {
+window.deleteEntry = async function (entryId) {
     if (!confirm('Delete this entry?')) return;
 
     try {
@@ -1970,7 +1985,7 @@ window.deleteEntry = async function(entryId) {
  * Updates a work item's state (TODO/WIP/MEMO/DONE) and reloads the page.
  * Full reload is used because state changes affect filtering, sorting, and archiving.
  */
-window.updateState = async function(id, newState) {
+window.updateState = async function (id, newState) {
     try {
         const res = await fetch(`/api/items/${id}`, {
             method: 'PUT',
@@ -1986,7 +2001,7 @@ window.updateState = async function(id, newState) {
 };
 
 /** Deletes a work item and all its entries after user confirmation. */
-window.deleteItem = async function(id) {
+window.deleteItem = async function (id) {
     if (!confirm('Are you sure you want to delete this Work Item and ALL nested journals?')) return;
 
     try {
@@ -2016,7 +2031,7 @@ window.deleteItem = async function(id) {
  * If the entry belongs to a DONE/archived item, renders it in the archived section.
  * If markerId is provided, moves the cursor to the end of the marker span in the editor.
  */
-window.focusEntry = function(entryId, isArchived, itemId, markerId = null) {
+window.focusEntry = function (entryId, isArchived, itemId, markerId = null) {
     if (isArchived) {
         const archivedContainer = document.getElementById('archived-container');
         const existingItem = archivedContainer.querySelector(`.work-item[data-id="${itemId}"]`);
