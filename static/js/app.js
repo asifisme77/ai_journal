@@ -1130,6 +1130,29 @@ function initTinyMCE(entry, autoFocus = false) {
         setup: function (editor) {
 
             // ================================================================
+            // PASTE HANDLER: Preserve plain text in PRE blocks
+            // ================================================================
+            editor.on('paste', function (e) {
+                const node = editor.selection.getNode();
+                const pre = editor.dom.getParent(node, 'PRE');
+                if (pre || node.nodeName === 'PRE') {
+                    // Prevent default paste from stripping or breaking PRE tags
+                    e.preventDefault();
+                    let text = '';
+                    if (e.clipboardData && e.clipboardData.getData) {
+                        text = e.clipboardData.getData('text/plain');
+                    } else if (window.clipboardData && window.clipboardData.getData) {
+                        text = window.clipboardData.getData('Text');
+                    }
+                    if (text) {
+                        // Insert as plain text with line breaks preserved
+                        const safeText = escapeHtml(text).replace(/\r?\n/g, '<br>');
+                        editor.insertContent(safeText);
+                    }
+                }
+            });
+
+            // ================================================================
             // INIT FOCUS
             // ================================================================
             editor.on('init', function () {
