@@ -14,6 +14,12 @@
 // INITIALIZATION & CORE DATA FETCHING
 // ============================================================================
 
+// Immediate theme initialization to prevent flash
+const savedTheme = localStorage.getItem('theme') || 'dark';
+if (savedTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const itemsContainer = document.getElementById('items-container');
     const addItemForm = document.getElementById('add-item-form');
@@ -25,9 +31,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Initial data load
+    initThemeToggle();
     fetchItems();
     initResizableSidebar();
     initSidebarSections();
+
+    /**
+     * Initializes the theme toggle button action.
+     */
+    function initThemeToggle() {
+        const themeBtn = document.getElementById('theme-toggle');
+        if (!themeBtn) return;
+
+        // Set initial icon
+        themeBtn.innerHTML = document.documentElement.getAttribute('data-theme') === 'light' 
+            ? '<i class="ph ph-moon"></i>' 
+            : '<i class="ph ph-sun"></i>';
+            
+        // Expose toggle globally to ensure DOM can access it directly via onclick
+        window.toggleTheme = function(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            const newTheme = isLight ? 'dark' : 'light';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            console.log("Theme switched to", newTheme);
+            
+            // Allow CSS to render slightly before reload so user sees feedback
+            setTimeout(() => { window.location.reload(); }, 50);
+        };
+    }
 
     /**
      * Initializes collapsible sidebar section headers.
@@ -1001,7 +1038,7 @@ function initResizableLogBlockColumns(editor) {
  * @param {boolean} initiallyExpanded - Whether the entry starts expanded
  * @returns {HTMLElement} The entry DOM element
  */
-function createEntryElement(entry, isLast = false, initiallyExpanded = false) {
+function createEntryElement(entry, isLast = false, initiallyExpanded = false, autoFocus = false) {
     const entryDiv = document.createElement('div');
     entryDiv.className = `journal-entry ${initiallyExpanded ? 'expanded' : ''}`;
     entryDiv.dataset.entryId = entry.id;
@@ -1046,7 +1083,7 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false) {
     });
 
     // Initialize TinyMCE on next tick (element must be in DOM first)
-    setTimeout(() => initTinyMCE(entry), 0);
+    setTimeout(() => initTinyMCE(entry, autoFocus), 0);
 
     return entryDiv;
 }
@@ -1056,7 +1093,7 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false) {
  * Configures: outliner, auto-save, custom toolbar buttons, click handlers,
  * table indentation, and keyboard shortcuts.
  */
-function initTinyMCE(entry) {
+function initTinyMCE(entry, autoFocus = false) {
     const targetId = `tinymce-${entry.id}`;
 
     // Remove any pre-existing editor instance for this target
@@ -1064,13 +1101,15 @@ function initTinyMCE(entry) {
         tinymce.get(targetId).remove();
     }
 
+    const currentTheme = localStorage.getItem('theme') || 'dark';
     tinymce.init({
         selector: `#${targetId}`,
         inline: true,
         indentation: '20px',
         fixed_toolbar_container: `#toolbar-${entry.id}`,
         ui_container: 'body',
-        skin: 'oxide-dark',
+        skin: currentTheme === 'light' ? 'oxide' : 'oxide-dark',
+        content_css: currentTheme === 'light' ? 'default' : 'dark',
         menubar: false,
         statusbar: false,
         extended_valid_elements: 'details[class|open|style],summary,span[class|data-marker-id|contenteditable|title|style]',
@@ -1089,6 +1128,15 @@ function initTinyMCE(entry) {
         table_use_colgroups: false,
 
         setup: function (editor) {
+
+            // ================================================================
+            // INIT FOCUS
+            // ================================================================
+            editor.on('init', function () {
+                if (autoFocus) {
+                    editor.focus();
+                }
+            });
 
             // ================================================================
             // LINK: Simplified Prompt (Replaces heavy dialog)
@@ -1280,7 +1328,8 @@ function initTinyMCE(entry) {
                     let isParent = false;
                     const textContent = (block.textContent || '').replace(/[\s\u00A0\u200B\u200E\u200F\uFEFF]/g, '');
 
-                    if (textContent.length > 0) {
+                    // Do not allow bulleted or numbered list items to become outliner parents
+                    if (textContent.length > 0 && block.nodeName !== 'LI') {
                         // Look ahead for the next non-blank block to compare indentation
                         let nextIndent = -1;
                         for (let j = i + 1; j < blocks.length; j++) {
@@ -1427,10 +1476,22 @@ function initTinyMCE(entry) {
                     const marginStyle = indent > 0 ? ` style="margin-left: ${indent}px;"` : '';
                     const pStyle = indent > 0 ? ` style="padding-left: ${indent}px;"` : '';
 
+                    // Capture current text selection to place inside the log block
+                    let selectedText = editor.selection.getContent({format: 'text'});
+                    let preContent = 'Paste logs/code here...';
+                    
+                    if (selectedText && selectedText.trim() !== '') {
+                        // Encode HTML entities to prevent rendering arbitrary HTML, convert newlines to <br> for <pre>
+                        preContent = selectedText.replace(/&/g, '&amp;')
+                                                 .replace(/</g, '&lt;')
+                                                 .replace(/>/g, '&gt;')
+                                                 .replace(/\n/g, '<br>');
+                    }
+
                     editor.insertContent(
                         `<details class="log-block"${marginStyle}>`
                         + `<summary>Logs (click to expand) <span class="delete-log-block" contenteditable="false" title="Delete this block" style="float: right; margin-right: 8px; color: #ef4444; font-size: 14px;">&times;</span></summary>`
-                        + `<pre>Paste logs/code here...</pre>`
+                        + `<pre>${preContent}</pre>`
                         + `</details>`
                         + `<p${pStyle}>&nbsp;</p>`
                     );
@@ -1483,44 +1544,90 @@ function initTinyMCE(entry) {
                 icon: 'remove-formatting',
                 tooltip: 'Clear Formatting',
                 onAction: function () {
-                    const node = editor.selection.getNode();
-                    const block = editor.dom.getParent(node, editor.dom.isBlock);
+                    editor.undoManager.transact(() => {
+                        // 1. Insert span bookmarks to accurately track selection across node replacements
+                        const bookmark = editor.selection.getBookmark(2, true);
+                        
+                        const selectedBlocks = editor.selection.getSelectedBlocks();
+                        
+                        selectedBlocks.forEach(block => {
+                            if (!block) return;
 
-                    if (block) {
-                        // Preserve indentation styles
-                        const paddingLeft = editor.dom.getStyle(block, 'padding-left');
-                        const marginLeft = editor.dom.getStyle(block, 'margin-left');
+                            const logBlock = editor.dom.getParent(block, 'details.log-block');
+                            if (logBlock) {
+                                // Prevent processing the same logBlock multiple times if multiple inner blocks are selected
+                                if (logBlock.hasAttribute('data-processing')) return;
+                                logBlock.setAttribute('data-processing', 'true');
 
-                        // Remove all formatting including links
+                                const ml = editor.dom.getStyle(logBlock, 'margin-left');
+                                const attrString = ml ? ` style="padding-left: ${ml};"` : '';
+                                const pre = logBlock.querySelector('pre');
+                                
+                                if (pre) {
+                                    // Salvage any bookmark spans inside the details block that aren't in the pre
+                                    const bmSpans = Array.from(logBlock.querySelectorAll('span[data-mce-type="bookmark"]'));
+                                    bmSpans.forEach(span => {
+                                        if (!pre.contains(span)) {
+                                            pre.appendChild(span);
+                                        }
+                                    });
+
+                                    // Convert literal newlines to <br> so paragraphs format correctly
+                                    const content = pre.innerHTML.replace(/\\n/g, '<br>');
+                                    logBlock.outerHTML = `<p${attrString}>${content}</p>`;
+                                }
+                            } else if (block.nodeName === 'PRE' || /^H[1-6]$/.test(block.nodeName)) {
+                                const pl = editor.dom.getStyle(block, 'padding-left');
+                                const ml = editor.dom.getStyle(block, 'margin-left');
+                                let styleStr = '';
+                                if (pl) styleStr += `padding-left: ${pl}; `;
+                                if (ml) styleStr += `margin-left: ${ml}; `;
+                                
+                                const attrString = styleStr ? ` style="${styleStr.trim()}"` : '';
+                                const content = block.nodeName === 'PRE' ? block.innerHTML.replace(/\\n/g, '<br>') : block.innerHTML;
+                                
+                                block.outerHTML = `<p${attrString}>${content}</p>`;
+                            } else {
+                                // Temporarily store indent styles for standard blocks
+                                block.setAttribute('data-pl', editor.dom.getStyle(block, 'padding-left') || '');
+                                block.setAttribute('data-ml', editor.dom.getStyle(block, 'margin-left') || '');
+                            }
+                        });
+
+                        // 2. Restore selection using the spans
+                        editor.selection.moveToBookmark(bookmark);
+
+                        // 3. Clear formatting (inline styles, colors, bold, etc.) on the restored selection
                         editor.execCommand('removeFormat', false, {
                             'selector': 'b,strong,i,em,u,strike,s,sub,sup,span,font,a',
                             'attributes': ['style', 'class', 'id', 'title', 'href', 'target', 'rel']
                         });
 
-                        // Also remove any remaining links specifically
-                        const links = editor.dom.select('a');
-                        links.forEach(function (link) {
-                            const text = link.textContent || link.innerText;
-                            editor.dom.replace(editor.dom.create('span', {}, text), link);
+                        // 4. Manually strip specific tags like 'A' and restore indents on standard blocks
+                        const currentBlocks = editor.selection.getSelectedBlocks();
+                        currentBlocks.forEach(block => {
+                            if (!block) return;
+                            
+                            // Strip lingering links inside selection
+                            const links = Array.from(block.querySelectorAll('a'));
+                            links.forEach(link => {
+                                if (editor.selection.getRng().intersectsNode(link)) {
+                                    const text = link.textContent || link.innerText;
+                                    editor.dom.replace(editor.dom.create('span', {}, text), link);
+                                }
+                            });
+                            
+                            // Restore padding for standard blocks
+                            if (block.hasAttribute('data-pl')) {
+                                const pl = block.getAttribute('data-pl');
+                                const ml = block.getAttribute('data-ml');
+                                if (pl) editor.dom.setStyle(block, 'padding-left', pl);
+                                if (ml) editor.dom.setStyle(block, 'margin-left', ml);
+                                block.removeAttribute('data-pl');
+                                block.removeAttribute('data-ml');
+                            }
                         });
-
-                        // Restore indentation
-                        if (paddingLeft) editor.dom.setStyle(block, 'padding-left', paddingLeft);
-                        if (marginLeft) editor.dom.setStyle(block, 'margin-left', marginLeft);
-                    } else {
-                        // Remove all formatting including links
-                        editor.execCommand('removeFormat', false, {
-                            'selector': 'b,strong,i,em,u,strike,s,sub,sup,span,font,a',
-                            'attributes': ['style', 'class', 'id', 'title', 'href', 'target', 'rel']
-                        });
-
-                        // Also remove any remaining links specifically
-                        const links = editor.dom.select('a');
-                        links.forEach(function (link) {
-                            const text = link.textContent || link.innerText;
-                            editor.dom.replace(editor.dom.create('span', {}, text), link);
-                        });
-                    }
+                    });
                 }
             });
 
@@ -1620,6 +1727,7 @@ function initTinyMCE(entry) {
             // ================================================================
 
             let tableInsertIndent = 0;
+            let preFormatIndent = 0;
 
             // Capture current indent before table insertion
             editor.on('BeforeExecCommand', function (e) {
@@ -1633,6 +1741,16 @@ function initTinyMCE(entry) {
                         tableInsertIndent += parseInt(editor.dom.getStyle(block, 'margin-left') || 0, 10);
                     }
                     tableInsertIndent += editor.dom.getParents(node, 'OL,UL').length * 20;
+                } else if (e.command === 'FormatBlock' && typeof e.value === 'string' && e.value.toLowerCase() === 'pre') {
+                    const node = editor.selection.getNode();
+                    const block = editor.dom.getParent(node, editor.dom.isBlock);
+                    preFormatIndent = 0;
+
+                    if (block) {
+                        preFormatIndent += parseInt(editor.dom.getStyle(block, 'padding-left') || 0, 10);
+                        preFormatIndent += parseInt(editor.dom.getStyle(block, 'margin-left') || 0, 10);
+                    }
+                    preFormatIndent += editor.dom.getParents(node, 'OL,UL').length * 20;
                 }
             });
 
@@ -1659,6 +1777,56 @@ function initTinyMCE(entry) {
                         }
                     }
                 }
+
+                // If user applies 'Preformatted' block styling to multiple paragraphs, TinyMCE 
+                // splits them into multiple <pre> blocks. Merge them back tightly.
+                if (e.command === 'FormatBlock' && typeof e.value === 'string' && e.value.toLowerCase() === 'pre') {
+                    editor.undoManager.transact(() => {
+                        const bookmark = editor.selection.getBookmark(2, true);
+
+                        // 1. Re-apply captured indentation specifically to the newly formatted selection
+                        const selectedBlocks = editor.selection.getSelectedBlocks();
+                        selectedBlocks.forEach(block => {
+                            if (block && block.nodeName === 'PRE' && preFormatIndent > 0) {
+                                editor.dom.setStyle(block, 'padding-left', preFormatIndent + 'px');
+                            }
+                        });
+
+                        const preBlocks = Array.from(editor.getBody().querySelectorAll('pre'));
+                        for (let i = 0; i < preBlocks.length - 1; i++) {
+                            const current = preBlocks[i];
+                            let next = current.nextSibling;
+
+                            while (next && next.nodeType === 3 && next.textContent.trim() === '') {
+                                const temp = next;
+                                next = next.nextSibling;
+                                temp.remove(); // clear whitespace nodes between pre tags
+                            }
+
+                            if (next && next.nodeName === 'PRE') {
+                                // Merge adjacent pre blocks not inside a details wrapper
+                                if (!editor.dom.getParent(current, 'details') && !editor.dom.getParent(next, 'details')) {
+                                    // Make sure both have the same padding
+                                    const currentPadding = parseInt(editor.dom.getStyle(current, 'padding-left') || 0, 10);
+                                    const nextPadding = parseInt(editor.dom.getStyle(next, 'padding-left') || 0, 10);
+                                    
+                                    // Only merge if they are at the same indentation level
+                                    if (currentPadding === nextPadding) {
+                                        current.innerHTML += '\\n' + next.innerHTML;
+                                        next.remove();
+                                        
+                                        const index = preBlocks.indexOf(next);
+                                        if (index > -1) preBlocks.splice(index, 1);
+                                        
+                                        i--; // re-check the newly merged element against upcoming siblings
+                                    }
+                                }
+                            }
+                        }
+
+                        editor.selection.moveToBookmark(bookmark);
+                    });
+                }
             });
 
             // ================================================================
@@ -1670,17 +1838,13 @@ function initTinyMCE(entry) {
                     event.preventDefault();
                     event.stopPropagation();
 
-                    // Focus/indent handling for Collapsible Log Blocks
+                    // Focus/indent handling for Collapsible Log Blocks & PRE tags
                     const node = editor.selection.getNode();
-                    const logBlock = editor.dom.getParent(node, 'details.log-block');
-                    if (logBlock) {
-                        let currentIndent = parseInt(editor.dom.getStyle(logBlock, 'margin-left') || 0, 10);
+                    const preBlock = editor.dom.getParent(node, 'PRE');
+                    if (preBlock) {
+                        // Standard code editor behavior: insert tab/spaces instead of indenting the block element
                         if (!event.shiftKey) {
-                            editor.dom.setStyle(logBlock, 'margin-left', (currentIndent + 20) + 'px');
-                        } else {
-                            if (currentIndent >= 20) {
-                                editor.dom.setStyle(logBlock, 'margin-left', (currentIndent - 20) + 'px');
-                            }
+                            editor.insertContent('    ');
                         }
                         return false;
                     }
@@ -1892,8 +2056,13 @@ window.addEntry = async function (itemId) {
             const addFirstBtn = entriesContainer.querySelector('.btn-ghost');
             if (addFirstBtn) addFirstBtn.parentElement.remove();
 
-            // Newly added entries are always expanded
-            entriesContainer.appendChild(createEntryElement(newEntry, true, true));
+            // Collapse all previously expanded entries before adding the new one
+            entriesContainer.querySelectorAll('.journal-entry.expanded').forEach(entry => {
+                entry.classList.remove('expanded');
+            });
+
+            // Newly added entries are always expanded and focused
+            entriesContainer.appendChild(createEntryElement(newEntry, true, true, true));
 
             // Auto-expand the parent work item
             const workItem = document.querySelector(`.work-item[data-id="${itemId}"]`);

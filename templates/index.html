@@ -22,8 +22,11 @@
                 <div class="search-quick">
                     <i class="ph ph-magnifying-glass"></i>
                     <input type="text" id="search-input" placeholder="Search tasks or journals...">
-                    <button id="search-advanced-toggle" title="Advanced search">
+                    <button id="search-advanced-toggle" title="Advanced search" class="search-action-btn">
                         <i class="ph ph-sliders-horizontal"></i>
+                    </button>
+                    <button id="theme-toggle" title="Toggle Light/Dark Mode" class="search-action-btn" onclick="window.toggleTheme(event)">
+                        <i class="ph ph-sun"></i>
                     </button>
                 </div>
                 <div id="search-advanced" class="search-advanced hidden">
@@ -130,7 +133,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
 </body>
 
 </html>
