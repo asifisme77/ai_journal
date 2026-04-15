@@ -65,6 +65,7 @@ class JournalEntry(db.Model):
     work_item_id = db.Column(db.Integer, db.ForeignKey('work_item.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     markers = db.relationship('Marker', backref='entry', cascade='all, delete-orphan')
 
@@ -75,6 +76,7 @@ class JournalEntry(db.Model):
             'work_item_id': self.work_item_id,
             'title': self.title,
             'content': self.content,
+            'status': self.status,
             'created_at': self.created_at.isoformat(),
             'markers': active_markers
         }
@@ -259,7 +261,8 @@ def create_entry(item_id):
     new_entry = JournalEntry(
         work_item_id=item.id,
         title=title,
-        content=data.get('content', '')
+        content=data.get('content', ''),
+        status=data.get('status')
     )
     db.session.add(new_entry)
     db.session.commit()
@@ -276,6 +279,8 @@ def update_entry(entry_id):
         entry.title = data['title']
     if 'content' in data:
         entry.content = data['content']
+    if 'status' in data:
+        entry.status = data['status']
 
     db.session.commit()
     return jsonify(entry.to_dict())

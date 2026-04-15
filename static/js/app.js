@@ -1087,6 +1087,11 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
             <i class="ph ph-caret-down entry-toggle-icon"></i>
             <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onclick="event.stopPropagation()" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
             <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
+                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-right: 0.25rem;">
+                    <option value="" ${!entry.status ? 'selected' : ''}>NONE</option>
+                    <option value="FOLLOWUP" ${entry.status === 'FOLLOWUP' ? 'selected' : ''}>FOLLOWUP</option>
+                    <option value="DONE" ${entry.status === 'DONE' ? 'selected' : ''}>DONE</option>
+                </select>
                 <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
                 ${addButtonHTML}
                 <button class="btn-secondary btn-danger btn-small" style="border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id}); event.stopPropagation()"><i class="ph ph-trash"></i></button>
@@ -1181,6 +1186,59 @@ function initTinyMCE(entry, autoFocus = false) {
                         const safeText = escapeHtml(text).replace(/\r?\n/g, '<br>');
                         editor.insertContent(safeText);
                     }
+                }
+            });
+
+            // ================================================================
+            // COPY/CUT HANDLER: Convert structural indents to plain spaces
+            // ================================================================
+            editor.on('copy cut', function (e) {
+                const sel = editor.selection;
+                if (sel.isCollapsed()) return;
+
+                e.preventDefault();
+
+                // 1. Get raw HTML for rich-text paste scenarios
+                const richHtml = sel.getContent({ format: 'html' });
+
+                // 2. Temporarily inject spatial text nodes for plain-text extraction
+                const blocks = sel.getSelectedBlocks();
+                const injectedNodes = [];
+                const SPACES_PER_INDENT = 4;
+
+                blocks.forEach(block => {
+                    const indentPx = getBlockIndent(editor, block);
+                    const spacesCount = Math.round(indentPx / 20) * SPACES_PER_INDENT;
+                    
+                    if (spacesCount > 0) {
+                        const indentChars = ' '.repeat(spacesCount);
+                        const textNode = document.createTextNode(indentChars);
+                        block.insertBefore(textNode, block.firstChild);
+                        injectedNodes.push(textNode);
+                    }
+                });
+
+                // 3. Read native selection plain text (which perfectly incorporates partial selection limits)
+                let plainText = '';
+                const nativeSel = window.getSelection();
+                if (nativeSel.rangeCount > 0) {
+                    plainText = nativeSel.toString();
+                }
+
+                // 4. Cleanup injected nodes instantly
+                injectedNodes.forEach(node => node.remove());
+
+                // 5. Pipe to clipboard
+                if (e.clipboardData) {
+                    e.clipboardData.setData('text/plain', plainText);
+                    e.clipboardData.setData('text/html', richHtml);
+                } else if (window.clipboardData) {
+                    window.clipboardData.setData('Text', plainText);
+                }
+
+                // 6. Complete the operation if it was a cut
+                if (e.type === 'cut') {
+                    editor.execCommand('delete');
                 }
             });
 
@@ -2156,6 +2214,19 @@ window.updateEntryTitle = async function (entryId, newTitle) {
         });
     } catch (error) {
         console.error('Error updating entry title:', error);
+    }
+};
+
+/** Updates a journal entry's status via the API. */
+window.updateEntryStatus = async function (entryId, newStatus) {
+    try {
+        await fetch(`/api/entries/${entryId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus === "" ? null : newStatus })
+        });
+    } catch (error) {
+        console.error('Error updating entry status:', error);
     }
 };
 
