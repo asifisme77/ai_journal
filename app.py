@@ -19,6 +19,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import os
 from werkzeug.utils import secure_filename
+from sqlalchemy import inspect, text
 
 # ============================================================================
 # APP CONFIGURATION
@@ -122,6 +123,18 @@ class MemoFolder(db.Model):
 # Create tables on startup
 with app.app_context():
     db.create_all()
+
+    # Auto-migration for older databases missing the 'status' column
+    try:
+        inspector = inspect(db.engine)
+        if 'journal_entry' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('journal_entry')]
+            if 'status' not in columns:
+                with db.engine.connect() as conn:
+                    conn.execute(text('ALTER TABLE journal_entry ADD COLUMN status VARCHAR(20)'))
+                    conn.commit()
+    except Exception as e:
+        print(f"Error during schema migration: {e}")
 
 # ============================================================================
 # ROUTES: Pages
