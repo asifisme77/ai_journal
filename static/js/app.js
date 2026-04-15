@@ -656,8 +656,11 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Builds a nested Year > Month > Date > Entry tree for the timeline sidebar.
      * Entries are sorted newest-first. Each entry links back to its parent work item.
+     * @param {Array}  items      - Work item objects from the API
+     * @param {string} [searchTerm=''] - Optional query string; when set, clicking a
+     *                                   result places the cursor on the first match.
      */
-    function renderTimeline(items) {
+    function renderTimeline(items, searchTerm = '') {
         // Flatten all entries with parent item reference
         const allEntries = [];
         items.forEach(item => {
@@ -730,13 +733,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         const entryDiv = document.createElement('div');
                         entryDiv.className = `timeline-item ${stateClass} ${isArchived ? 'timeline-item-archived' : ''}`;
 
+                        // Build markers markup (no inline onclick — wired via addEventListener below)
                         let markersHTML = '';
                         if (entry.markers && entry.markers.length > 0) {
-                            markersHTML = `<details class="timeline-marker-details" onclick="event.stopPropagation()">
+                            markersHTML = `<details class="timeline-marker-details">
                                 <summary>${entry.markers.length} Marker${entry.markers.length > 1 ? 's' : ''}</summary>
                                 <div class="timeline-markers">
                                     ${entry.markers.map(m => `
-                                        <div class="timeline-marker-item" onclick="window.focusEntry(${entry.id}, ${isArchived}, ${entry.parentItem.id})">
+                                        <div class="timeline-marker-item" data-entry-id="${entry.id}" data-is-archived="${isArchived}" data-item-id="${entry.parentItem.id}">
                                             <div class="timeline-marker-bubble ${m.reminder_due_date ? 'has-reminder' : ''}"></div>
                                             <div class="timeline-marker-text" title="${escapeHtml(m.text || 'Marker')}">${escapeHtml(m.text || 'Marker')}</div>
                                         </div>
@@ -747,12 +751,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         entryDiv.innerHTML = `
                             <div class="timeline-task">${escapeHtml(entry.parentItem.heading)}</div>
-                            <div class="timeline-entry-title" onclick="window.focusEntry(${entry.id}, ${isArchived}, ${entry.parentItem.id})">
+                            <div class="timeline-entry-title">
                                 <span class="timeline-entry-text">${escapeHtml(entry.title)}</span>
                                 <span class="timeline-time">${timeStr}</span>
                             </div>
                             ${markersHTML}
                         `;
+
+                        // Wire click on the whole card — markers stop propagation so they won't mis-fire
+                        entryDiv.addEventListener('click', () =>
+                            window.focusEntry(entry.id, isArchived, entry.parentItem.id, null, searchTerm, entry.parentItem)
+                        );
+
+                        entryDiv.querySelectorAll('.timeline-marker-item').forEach(markerEl => {
+                            markerEl.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                window.focusEntry(
+                                    parseInt(markerEl.dataset.entryId, 10),
+                                    markerEl.dataset.isArchived === 'true',
+                                    parseInt(markerEl.dataset.itemId, 10),
+                                    null,
+                                    searchTerm
+                                );
+                            });
+                        });
+
+                        // Prevent the marker <details> toggle from bubbling to entry click
+                        const markerDetails = entryDiv.querySelector('.timeline-marker-details');
+                        if (markerDetails) {
+                            markerDetails.addEventListener('click', e => e.stopPropagation());
+                        }
+
                         dateContent.appendChild(entryDiv);
                     });
 
@@ -841,7 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (items.length === 0) {
                 timelineContainer.innerHTML = '<div class="loading-state">No results.</div>';
             } else {
-                renderTimeline(items);
+                renderTimeline(items, q);
             }
         } catch (error) {
             console.error('Search error:', error);
@@ -1074,6 +1103,7 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     const toolbarContainer = document.createElement('div');
     toolbarContainer.id = `toolbar-${entry.id}`;
     toolbarContainer.className = 'entry-toolbar-container floating-toolbar';
+    toolbarContainer.style.display = 'none';
     document.body.appendChild(toolbarContainer);
 
     // Toggle expand/collapse on header click
@@ -1112,10 +1142,12 @@ function initTinyMCE(entry, autoFocus = false) {
         content_css: currentTheme === 'light' ? 'default' : 'dark',
         menubar: false,
         statusbar: false,
+        branding: false,
+        promotion: false,
         extended_valid_elements: 'details[class|open|style],summary,span[class|data-marker-id|contenteditable|title|style]',
         plugins: 'lists link table autolink nonbreaking forecolor backcolor',
-        toolbar: 'blocks fontfamily forecolor backcolor | bold italic underline | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
-        contextmenu: 'addmarker link table',
+        toolbar: 'blocks fontfamily forecolor backcolor | setparagraph setpreformatted bold italic underline strikethrough | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
+        contextmenu: 'addmarker | cut copy paste | link table',
         table_default_attributes: {
             border: '0'
         },
@@ -1477,6 +1509,22 @@ function initTinyMCE(entry, autoFocus = false) {
             // ================================================================
             // CUSTOM TOOLBAR BUTTONS
             // ================================================================
+
+            editor.ui.registry.addButton('setparagraph', {
+                icon: 'paragraph',
+                tooltip: 'Convert to Paragraph (Normal Text)',
+                onAction: function () {
+                    editor.execCommand('FormatBlock', false, 'p');
+                }
+            });
+
+            editor.ui.registry.addButton('setpreformatted', {
+                icon: 'sourcecode',
+                tooltip: 'Convert to Preformatted Block',
+                onAction: function () {
+                    editor.execCommand('FormatBlock', false, 'pre');
+                }
+            });
 
             /**
              * Collapsible Log Block button: inserts a <details> block with a <pre>
@@ -2219,25 +2267,37 @@ window.deleteItem = async function (id) {
 // ============================================================================
 
 /**
- * Focuses a specific journal entry, scrolling to it and pulsing a highlight.
- * If the entry belongs to a DONE/archived item, renders it in the archived section.
- * If markerId is provided, moves the cursor to the end of the marker span in the editor.
+ * Places the cursor on the first occurrence of `searchTerm` inside the
+ * TinyMCE editor for the given entry.  Falls back gracefully if the editor
+ * is not yet initialised or the term is not found.
+ *
+ * @param {number}  entryId    - Journal entry ID
+ * @param {boolean} isArchived - Whether the parent work item is archived
+ * @param {number}  itemId     - Parent work item ID
+ * @param {number|null} markerId   - Optional marker ID to focus
+ * @param {string}  searchTerm - Optional text to find in the editor
+ * @param {Object|null} itemObj - Optional full item object (used for archived items to avoid stale allItemsData lookup)
  */
-window.focusEntry = function (entryId, isArchived, itemId, markerId = null) {
+window.focusEntry = function (entryId, isArchived, itemId, markerId = null, searchTerm = '', itemObj = null) {
+    console.log('[focusEntry] called', { entryId, isArchived, itemId, markerId, searchTerm });
     if (isArchived) {
         const archivedContainer = document.getElementById('archived-container');
         const existingItem = archivedContainer.querySelector(`.work-item[data-id="${itemId}"]`);
 
         if (!existingItem) {
-            const itemObj = window.allItemsData.find(i => i.id === itemId);
-            if (itemObj) {
+            // Prefer the directly-passed itemObj (e.g. from search results) to avoid
+            // stale or missing data in allItemsData.
+            const renderObj = itemObj || window.allItemsData.find(i => i.id === itemId);
+            console.log('[focusEntry] renderObj found?', !!renderObj, 'from closure?', !!itemObj);
+            if (renderObj) {
                 document.getElementById('archived-header').style.display = 'flex';
                 document.dispatchEvent(new CustomEvent('RenderArchivedItem', {
-                    detail: { itemObj, container: archivedContainer }
+                    detail: { itemObj: renderObj, container: archivedContainer }
                 }));
             }
         }
 
+        // Expand the work-item card as soon as it appears (it may not be in DOM yet)
         setTimeout(() => {
             const div = archivedContainer.querySelector(`.work-item[data-id="${itemId}"]`);
             if (div && !div.classList.contains('expanded')) div.classList.add('expanded');
@@ -2247,39 +2307,91 @@ window.focusEntry = function (entryId, isArchived, itemId, markerId = null) {
         if (div && !div.classList.contains('expanded')) div.classList.add('expanded');
     }
 
-    // Scroll to entry and apply highlight pulse animation
-    setTimeout(() => {
+    // -------------------------------------------------------------------------
+    // Poll until both the entry element AND its TinyMCE editor are ready.
+    // For active items 1-2 ticks is enough; archived items need more time
+    // because renderItem + initTinyMCE run asynchronously after the event.
+    // -------------------------------------------------------------------------
+    const MAX_WAIT_MS = 3000;
+    const POLL_INTERVAL_MS = 50;
+    let elapsed = 0;
+
+    function attemptFocus() {
         const entryEl = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
-        if (entryEl) {
-            if (!entryEl.classList.contains('expanded')) {
-                entryEl.classList.add('expanded');
+        const editor  = tinymce.get(`tinymce-${entryId}`);
+
+        if (!entryEl || !editor) {
+            elapsed += POLL_INTERVAL_MS;
+            if (elapsed < MAX_WAIT_MS) {
+                setTimeout(attemptFocus, POLL_INTERVAL_MS);
+            } else {
+                console.warn('[focusEntry] timed out waiting for entry/editor', { entryId, entryEl: !!entryEl, editor: !!editor });
             }
+            return;
+        }
 
-            entryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            entryEl.classList.add('highlight-pulse');
-            setTimeout(() => entryEl.classList.remove('highlight-pulse'), 2000);
+        // Expand the entry panel
+        if (!entryEl.classList.contains('expanded')) {
+            entryEl.classList.add('expanded');
+        }
 
-            const editor = tinymce.get(`tinymce-${entryId}`);
-            if (editor) {
-                editor.focus();
+        // Scroll into view and pulse
+        entryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        entryEl.classList.add('highlight-pulse');
+        setTimeout(() => entryEl.classList.remove('highlight-pulse'), 2000);
 
-                // If a markerId is given, place the cursor at the end of that marker span
-                if (markerId) {
-                    const markerSpan = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`)[0];
-                    if (markerSpan) {
-                        // Scroll the marker into view inside the editor
-                        markerSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // Focus the editor
+        editor.focus();
 
-                        // Place cursor at the END of the marker span
-                        const range = editor.dom.createRng();
-                        range.setStartAfter(markerSpan);
-                        range.setEndAfter(markerSpan);
-                        editor.selection.setRng(range);
-                    }
+        if (markerId) {
+            // Place cursor at end of the marker span
+            const markerSpan = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`)[0];
+            if (markerSpan) {
+                markerSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                const range = editor.dom.createRng();
+                range.setStartAfter(markerSpan);
+                range.setEndAfter(markerSpan);
+                editor.selection.setRng(range);
+            }
+        } else if (searchTerm) {
+            // Walk text nodes to find and select the first match (case-insensitive)
+            const term = searchTerm.toLowerCase();
+            const body = editor.getBody();
+            const walker = editor.dom.doc.createTreeWalker(
+                body,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+
+            let found = false;
+            let node;
+            while ((node = walker.nextNode())) {
+                const text = node.nodeValue || '';
+                const idx = text.toLowerCase().indexOf(term);
+                if (idx !== -1) {
+                    const range = editor.dom.createRng();
+                    range.setStart(node, idx);
+                    range.setEnd(node, idx + term.length);
+                    editor.selection.setRng(range);
+
+                    const selEl = editor.selection.getNode();
+                    if (selEl) selEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                    found = true;
+                    break;
                 }
             }
+
+            if (!found) {
+                editor.selection.select(body, true);
+                editor.selection.collapse(true);
+            }
         }
-    }, 200);
+    }
+
+    // Give the DOM one tick to start rendering before the first poll attempt
+    setTimeout(attemptFocus, 50);
 };
 
 /**

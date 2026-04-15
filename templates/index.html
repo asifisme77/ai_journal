@@ -25,7 +25,8 @@
                     <button id="search-advanced-toggle" title="Advanced search" class="search-action-btn">
                         <i class="ph ph-sliders-horizontal"></i>
                     </button>
-                    <button id="theme-toggle" title="Toggle Light/Dark Mode" class="search-action-btn" onclick="window.toggleTheme(event)">
+                    <button id="theme-toggle" title="Toggle Light/Dark Mode" class="search-action-btn"
+                        onclick="window.toggleTheme(event)">
                         <i class="ph ph-sun"></i>
                     </button>
                 </div>
@@ -56,7 +57,8 @@
 
             <div class="sidebar-section open">
                 <div class="sidebar-section-header">
-                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-push-pin"></i> Markers</h2>
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-push-pin"></i> Markers
+                    </h2>
                 </div>
                 <div class="sidebar-section-content">
                     <div id="reminders-container">
@@ -68,12 +70,14 @@
             <div class="sidebar-section open">
                 <div class="sidebar-section-header">
                     <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-note"></i> Memos
-                        <button id="memo-add-folder-btn" title="New folder" class="memo-add-folder-btn"><i class="ph ph-folder-plus"></i></button>
+                        <button id="memo-add-folder-btn" title="New folder" class="memo-add-folder-btn"><i
+                                class="ph ph-folder-plus"></i></button>
                     </h2>
                 </div>
                 <div class="sidebar-section-content">
                     <div id="memo-new-folder-row" class="memo-new-folder-row hidden">
-                        <input type="text" id="memo-new-folder-input" placeholder="Folder name..." class="memo-folder-input" />
+                        <input type="text" id="memo-new-folder-input" placeholder="Folder name..."
+                            class="memo-folder-input" />
                         <button id="memo-new-folder-save" class="btn-primary btn-small">Save</button>
                         <button id="memo-new-folder-cancel" class="btn-secondary btn-small">✕</button>
                     </div>
@@ -123,12 +127,17 @@
             <button class="btn-close" id="marker-popover-close"><i class="ph ph-x"></i></button>
         </div>
         <div class="marker-popover-body">
-            <button id="marker-btn-close" class="btn-danger btn-small" style="width: 100%; margin-bottom: 0.5rem;"><i class="ph ph-trash"></i> Close Marker</button>
+            <button id="marker-btn-close" class="btn-danger btn-small" style="width: 100%; margin-bottom: 0.5rem;"><i
+                    class="ph ph-trash"></i> Close Marker</button>
             <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 0.5rem 0;">
             <div class="reminder-section">
-                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem; display: block;">Set Reminder</label>
-                <input type="datetime-local" id="marker-reminder-input" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.25rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.75rem;" />
-                <button id="marker-btn-reminder" class="btn-primary btn-small" style="width: 100%;"><i class="ph ph-bell"></i> Save Reminder</button>
+                <label
+                    style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem; display: block;">Set
+                    Reminder</label>
+                <input type="datetime-local" id="marker-reminder-input"
+                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.25rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.75rem;" />
+                <button id="marker-btn-reminder" class="btn-primary btn-small" style="width: 100%;"><i
+                        class="ph ph-bell"></i> Save Reminder</button>
             </div>
         </div>
     </div>
