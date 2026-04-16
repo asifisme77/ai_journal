@@ -10,9 +10,11 @@
     --primary-hover: #1d4ed8;
 
     --state-todo: #ef4444;
-    --state-wip: #eab308; /* Darker yellow */
+    --state-wip: #eab308;
+    /* Darker yellow */
     --state-memo: #3b82f6;
-    --state-done: #16a34a; /* Darker green */
+    --state-done: #16a34a;
+    /* Darker green */
 
     --active-entry-bg: rgba(37, 99, 235, 0.08);
 
@@ -37,7 +39,7 @@
     --state-memo: #3b82f6;
     --state-done: #22c55e;
 
-    --active-entry-bg: rgba(37, 74, 134, 0.178);
+    --active-entry-bg: rgba(17, 116, 141, 0.178);
 
     /* Visual hierarchy colors */
     --task-header-bg: rgba(30, 41, 59, 0.8);
@@ -141,7 +143,8 @@ body {
 }
 
 .search-action-btn:hover {
-    background: rgba(255, 255, 255, 0.05); /* will fallback smoothly */
+    background: rgba(255, 255, 255, 0.05);
+    /* will fallback smoothly */
     color: var(--text-primary);
 }
 
@@ -620,6 +623,11 @@ body {
     min-width: 0;
 }
 
+.journal-entry.editing-active .entry-title-input {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
 .entry-title-input:focus {
     background: rgba(59, 130, 246, 0.08);
     border-color: rgba(59, 130, 246, 0.4);
@@ -640,6 +648,17 @@ body {
     transition: all 0.2s;
     margin: 0;
     min-width: 0;
+}
+
+.work-item.task-editing-active .item-header {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    border-radius: 6px;
+}
+
+.work-item.task-editing-active .item-title-input {
+    color: var(--primary-color);
 }
 
 .item-title-input:focus {
@@ -744,7 +763,8 @@ body {
     display: none;
     flex-wrap: wrap;
     gap: 0.25rem;
-    background: var(--bg-color); /* Need solid background instead of blur */
+    background: var(--bg-color);
+    /* Need solid background instead of blur */
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.5rem;
@@ -804,8 +824,8 @@ a.embedded-file:hover {
 }
 
 /* Make TinyMCE menu font smaller */
-.tox .tox-menu, 
-.tox .tox-collection__item-label, 
+.tox .tox-menu,
+.tox .tox-collection__item-label,
 .tox .tox-collection__item-accessory {
     font-size: 11.5px !important;
 }
@@ -829,7 +849,6 @@ a.embedded-file:hover {
     width: 100%;
     border-collapse: collapse;
     margin: 10px 0;
-    table-layout: fixed;
 }
 
 .tinymce-editor td,
@@ -840,6 +859,21 @@ a.embedded-file:hover {
     min-width: 30px;
     word-break: break-word;
     overflow-wrap: break-word;
+    transition: border-color 0.15s;
+}
+
+/* Resize hover: highlight the right border to show it's draggable */
+.tinymce-editor td.cell-resize-hover,
+.tinymce-editor th.cell-resize-hover {
+    border-right: 2px solid var(--primary-color);
+    cursor: col-resize;
+}
+
+/* Active drag: accent color on the entire column being resized */
+.tinymce-editor td.cell-resizing,
+.tinymce-editor th.cell-resizing {
+    border-right: 2px solid var(--primary-color);
+    background: rgba(59, 130, 246, 0.06);
 }
 
 /* Log Block Styling */

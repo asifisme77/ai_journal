@@ -961,16 +961,13 @@ function getOutlinerIndent(editor, block) {
 }
 
 /**
- * Initializes resizable columns for tables within log blocks.
+ * Initializes resizable columns for all tables in the editor.
  * Adds resize handles to each column that users can drag to resize.
  */
-function initResizableLogBlockColumns(editor) {
-    const logBlocks = editor.dom.select('details.log-block');
+function initResizableTableColumns(editor) {
+    const tables = editor.dom.select('table');
 
-    logBlocks.forEach(function (logBlock) {
-        const table = editor.dom.select('table', logBlock)[0];
-        if (!table) return;
-
+    tables.forEach(function (table) {
         const rows = editor.dom.select('tr', table);
         if (rows.length === 0) return;
 
@@ -979,14 +976,9 @@ function initResizableLogBlockColumns(editor) {
         const cells = editor.dom.select('td, th', firstRow);
         const numCols = cells.length;
 
-        // Force equal column widths initially
-        cells.forEach(function (cell) {
-            cell.style.width = (100 / numCols) + '%';
-        });
-
-        // Set all cells to have explicit widths
+        // Set widths on cells that don't already have explicit widths
         rows.forEach(function (row) {
-            editor.dom.select('td, th', row).forEach(function (cell, idx) {
+            editor.dom.select('td, th', row).forEach(function (cell) {
                 if (!cell.style.width) {
                     cell.style.width = (100 / numCols) + '%';
                 }
@@ -995,12 +987,65 @@ function initResizableLogBlockColumns(editor) {
     });
 
     // Add mousedown handler to the editor's entire content area
+    // (only bound once via a flag to prevent duplicates)
+    if (editor._resizeColumnsInitialized) return;
+    editor._resizeColumnsInitialized = true;
+
+    // Track the currently highlighted cell for resize hover feedback
+    let hoveredResizeCell = null;
+
+    // ---- Hover feedback: cursor + border highlight ----
+    editor.on('mousemove', function (e) {
+        const cell = editor.dom.getParent(e.target, 'td,th');
+
+        // Clear previous highlight if we left the cell
+        if (hoveredResizeCell && hoveredResizeCell !== cell) {
+            hoveredResizeCell.classList.remove('cell-resize-hover');
+            hoveredResizeCell = null;
+        }
+
+        if (!cell) {
+            editor.getBody().style.cursor = '';
+            return;
+        }
+
+        const table = editor.dom.getParent(cell, 'table');
+        if (!table) {
+            editor.getBody().style.cursor = '';
+            return;
+        }
+
+        const rect = cell.getBoundingClientRect();
+        const nearRightEdge = (rect.right - e.clientX) <= 15;
+
+        // Check it's not the last column
+        let isLastCol = false;
+        if (nearRightEdge) {
+            const row = editor.dom.getParent(cell, 'tr');
+            const rowCells = editor.dom.select('td,th', row);
+            isLastCol = (rowCells[rowCells.length - 1] === cell);
+        }
+
+        if (nearRightEdge && !isLastCol) {
+            editor.getBody().style.cursor = 'col-resize';
+            cell.classList.add('cell-resize-hover');
+            hoveredResizeCell = cell;
+        } else {
+            editor.getBody().style.cursor = '';
+            if (cell.classList.contains('cell-resize-hover')) {
+                cell.classList.remove('cell-resize-hover');
+            }
+            if (hoveredResizeCell === cell) hoveredResizeCell = null;
+        }
+    });
+
+    // ---- Mousedown: initiate drag resize ----
     editor.on('mousedown', function (e) {
         const cell = editor.dom.getParent(e.target, 'td,th');
         if (!cell) return;
 
         const table = editor.dom.getParent(cell, 'table');
-        if (!table || !editor.dom.getParent(table, 'details.log-block')) return;
+        if (!table) return;
 
         // Only allow resize if clicking on the right edge (last 15px of cell)
         const rect = cell.getBoundingClientRect();
@@ -1039,6 +1084,12 @@ function initResizableLogBlockColumns(editor) {
             }
         });
 
+        // Add active resize class to all cells in the column
+        colCells.forEach(c => c.classList.add('cell-resizing'));
+
+        // Force col-resize cursor on the entire body during drag
+        document.body.style.cursor = 'col-resize';
+
         function onMouseMove(e) {
             const diff = e.clientX - startX;
             const newWidth = Math.max(30, startWidth + diff);
@@ -1050,6 +1101,14 @@ function initResizableLogBlockColumns(editor) {
         function onMouseUp() {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            colCells.forEach(c => c.classList.remove('cell-resizing'));
+            if (hoveredResizeCell) {
+                hoveredResizeCell.classList.remove('cell-resize-hover');
+                hoveredResizeCell = null;
+            }
+            // Trigger a save after resizing
+            editor.fire('change');
         }
 
         document.addEventListener('mousemove', onMouseMove);
@@ -1085,7 +1144,7 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     entryDiv.innerHTML = `
         <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px; cursor: pointer;">
             <i class="ph ph-caret-down entry-toggle-icon"></i>
-            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onclick="event.stopPropagation()" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
+            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onclick="event.stopPropagation()" onfocus="this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
             <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
                 <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-right: 0.25rem;">
                     <option value="" ${!entry.status ? 'selected' : ''}>NONE</option>
@@ -1523,6 +1582,12 @@ function initTinyMCE(entry, autoFocus = false) {
                 if (toolbarEl) {
                     toolbarEl.style.display = 'none';
                 }
+                const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entry.id}"]`);
+                if (entryDiv) {
+                    entryDiv.classList.remove('editing-active');
+                    const workItem = entryDiv.closest('.work-item');
+                    if (workItem) workItem.classList.remove('task-editing-active');
+                }
             });
 
             editor.on('focus', () => {
@@ -1530,6 +1595,12 @@ function initTinyMCE(entry, autoFocus = false) {
                 const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
                 if (toolbarEl) {
                     toolbarEl.style.display = 'flex';
+                }
+                const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entry.id}"]`);
+                if (entryDiv) {
+                    entryDiv.classList.add('editing-active');
+                    const workItem = entryDiv.closest('.work-item');
+                    if (workItem) workItem.classList.add('task-editing-active');
                 }
             });
 
@@ -1556,12 +1627,12 @@ function initTinyMCE(entry, autoFocus = false) {
 
                 triggerOutlinerUpdate();
                 lastSavedContent = editor.getContent();
-                initResizableLogBlockColumns(editor);
+                initResizableTableColumns(editor);
             });
 
             // Initialize resizable columns on content changes
             editor.on('SetContent', function () {
-                initResizableLogBlockColumns(editor);
+                initResizableTableColumns(editor);
             });
 
             // ================================================================
