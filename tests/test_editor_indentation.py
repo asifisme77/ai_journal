@@ -1,5 +1,8 @@
 import pytest
-from playwright.sync_api import Page, expect
+try:
+    from playwright.sync_api import Page, expect
+except ImportError:
+    pytest.skip("playwright not installed", allow_module_level=True)
 import time
 
 def test_single_line_indent(flask_server, page: Page):

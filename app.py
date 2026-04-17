@@ -16,10 +16,12 @@ Routes:
 
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 import os
+import uuid
 from werkzeug.utils import secure_filename
 from sqlalchemy import inspect, text
+from sqlalchemy.orm import joinedload
 
 # ============================================================================
 # APP CONFIGURATION
@@ -45,18 +47,18 @@ class WorkItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     heading = db.Column(db.String(200), nullable=False)
     state = db.Column(db.String(20), default='TODO')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     memo_folder_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id'), nullable=True)
     entries = db.relationship('JournalEntry', backref='work_item', cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, exclude_content=False):
         return {
             'id': self.id,
             'heading': self.heading,
             'state': self.state,
             'created_at': self.created_at.isoformat(),
             'memo_folder_id': self.memo_folder_id,
-            'entries': [entry.to_dict() for entry in self.entries]
+            'entries': [entry.to_dict(exclude_content=exclude_content) for entry in self.entries]
         }
 
 
@@ -67,20 +69,22 @@ class JournalEntry(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     markers = db.relationship('Marker', backref='entry', cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, exclude_content=False):
         active_markers = [m.to_dict() for m in self.markers if m.state == 'OPEN']
-        return {
+        data = {
             'id': self.id,
             'work_item_id': self.work_item_id,
             'title': self.title,
-            'content': self.content,
             'status': self.status,
             'created_at': self.created_at.isoformat(),
             'markers': active_markers
         }
+        if not exclude_content:
+            data['content'] = self.content
+        return data
 
 class Marker(db.Model):
     """A span of text highlighted as a marker within a journal entry, optionally with a reminder."""
@@ -88,7 +92,7 @@ class Marker(db.Model):
     entry_id = db.Column(db.Integer, db.ForeignKey('journal_entry.id'), nullable=False)
     text = db.Column(db.Text, nullable=True)
     state = db.Column(db.String(20), default='OPEN') # 'OPEN' or 'CLOSED'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reminder_due_date = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
@@ -105,7 +109,7 @@ class MemoFolder(db.Model):
     """A named folder for organizing MEMO work items in the sidebar."""
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     parent_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id', ondelete='CASCADE'), nullable=True)
     
     items = db.relationship('WorkItem', backref='folder', lazy=True)
@@ -137,6 +141,34 @@ with app.app_context():
         print(f"Error during schema migration: {e}")
 
 # ============================================================================
+# CSRF PROTECTION
+# ============================================================================
+
+@app.before_request
+def csrf_origin_check():
+    """Lightweight CSRF guard: reject state-changing API requests from foreign origins.
+    
+    Browsers always send an Origin header on POST/PUT/DELETE requests.
+    If the Origin doesn't match the server, the request is rejected.
+    This blocks cross-site form submissions while allowing same-origin
+    fetch() calls and non-browser clients (curl, Postman) which don't
+    send an Origin header.
+    """
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return  # Safe methods — no check needed
+    if not request.path.startswith('/api/'):
+        return  # Only guard API routes
+
+    origin = request.headers.get('Origin')
+    if origin is None:
+        return  # Non-browser client (curl, tests) — allow
+
+    # Compare origin against the request's own host
+    allowed = f"{request.scheme}://{request.host}"
+    if origin != allowed:
+        return jsonify({'error': 'Cross-origin request blocked'}), 403
+
+# ============================================================================
 # ROUTES: Pages
 # ============================================================================
 
@@ -152,8 +184,20 @@ def index():
 @app.route('/api/items', methods=['GET'])
 def get_items():
     """List all work items (newest first) with their entries."""
-    items = WorkItem.query.order_by(WorkItem.created_at.desc()).all()
+    items = db.session.query(WorkItem).options(
+        joinedload(WorkItem.entries).joinedload(JournalEntry.markers)
+    ).order_by(WorkItem.created_at.desc()).all()
     return jsonify([item.to_dict() for item in items])
+
+@app.route('/api/timeline', methods=['GET'])
+def get_timeline():
+    """Lightweight endpoint for the sidebar timeline. Fetches items without their rich text content."""
+    from sqlalchemy.orm import defer
+    items = db.session.query(WorkItem).options(
+        joinedload(WorkItem.entries).joinedload(JournalEntry.markers),
+        joinedload(WorkItem.entries).defer(JournalEntry.content)
+    ).order_by(WorkItem.created_at.desc()).all()
+    return jsonify([item.to_dict(exclude_content=True) for item in items])
 
 
 @app.route('/api/items', methods=['POST'])
@@ -173,7 +217,7 @@ def create_item():
 @app.route('/api/items/<int:item_id>', methods=['PUT'])
 def update_item(item_id):
     """Update a work item's heading, state, and/or memo folder."""
-    item = WorkItem.query.get_or_404(item_id)
+    item = db.get_or_404(WorkItem, item_id)
     data = request.json
 
     if 'heading' in data:
@@ -182,7 +226,7 @@ def update_item(item_id):
         item.state = data['state']
     if 'memo_folder_id' in data:
         folder_id = data['memo_folder_id']
-        if folder_id is None or MemoFolder.query.get(folder_id):
+        if folder_id is None or db.session.get(MemoFolder, folder_id):
             item.memo_folder_id = folder_id
 
     db.session.commit()
@@ -192,7 +236,7 @@ def update_item(item_id):
 @app.route('/api/items/<int:item_id>', methods=['DELETE'])
 def delete_item(item_id):
     """Delete a work item and all its entries (cascade)."""
-    item = WorkItem.query.get_or_404(item_id)
+    item = db.get_or_404(WorkItem, item_id)
     db.session.delete(item)
     db.session.commit()
     return '', 204
@@ -206,7 +250,7 @@ def delete_item(item_id):
 def get_memo_folders():
     """List all memo folders in a hierarchical structure with their items."""
     def build_tree(parent_id=None):
-        folders = MemoFolder.query.filter_by(parent_id=parent_id).order_by(MemoFolder.created_at.asc()).all()
+        folders = db.session.query(MemoFolder).filter_by(parent_id=parent_id).order_by(MemoFolder.created_at.asc()).all()
         result = []
         for folder in folders:
             f = folder.to_dict()
@@ -216,7 +260,7 @@ def get_memo_folders():
         return result
 
     # Root-level items (memos with no folder)
-    root_memos = WorkItem.query.filter_by(state='MEMO', memo_folder_id=None).order_by(WorkItem.created_at.desc()).all()
+    root_memos = db.session.query(WorkItem).filter_by(state='MEMO', memo_folder_id=None).order_by(WorkItem.created_at.desc()).all()
     
     return jsonify({
         'folders': build_tree(None),
@@ -235,7 +279,7 @@ def create_memo_folder():
         return jsonify({'error': 'Folder name is required'}), 400
     
     # Enforce unique folder names within the same parent (case-insensitive)
-    existing = MemoFolder.query.filter(
+    existing = db.session.query(MemoFolder).filter(
         db.func.lower(MemoFolder.name) == name.lower(),
         MemoFolder.parent_id == parent_id
     ).first()
@@ -251,7 +295,7 @@ def create_memo_folder():
 @app.route('/api/memo-folders/<int:folder_id>', methods=['DELETE'])
 def delete_memo_folder(folder_id):
     """Delete a memo folder. Memos inside move back to root (folder_id = NULL)."""
-    folder = MemoFolder.query.get_or_404(folder_id)
+    folder = db.get_or_404(MemoFolder, folder_id)
     # Unassign all items in this folder
     for item in folder.items:
         item.memo_folder_id = None
@@ -266,7 +310,7 @@ def delete_memo_folder(folder_id):
 @app.route('/api/items/<int:item_id>/entries', methods=['POST'])
 def create_entry(item_id):
     """Create a new journal entry under a work item."""
-    item = WorkItem.query.get_or_404(item_id)
+    item = db.get_or_404(WorkItem, item_id)
     data = request.json
 
     title = data.get('title') or datetime.now().strftime("%B %d, %Y")
@@ -285,7 +329,7 @@ def create_entry(item_id):
 @app.route('/api/entries/<int:entry_id>', methods=['PUT'])
 def update_entry(entry_id):
     """Update a journal entry's title and/or content."""
-    entry = JournalEntry.query.get_or_404(entry_id)
+    entry = db.get_or_404(JournalEntry, entry_id)
     data = request.json
 
     if 'title' in data:
@@ -302,7 +346,7 @@ def update_entry(entry_id):
 @app.route('/api/entries/<int:entry_id>', methods=['DELETE'])
 def delete_entry(entry_id):
     """Delete a single journal entry."""
-    entry = JournalEntry.query.get_or_404(entry_id)
+    entry = db.get_or_404(JournalEntry, entry_id)
     db.session.delete(entry)
     db.session.commit()
     return '', 204
@@ -314,7 +358,7 @@ def delete_entry(entry_id):
 @app.route('/api/entries/<int:entry_id>/markers', methods=['POST'])
 def create_marker(entry_id):
     """Create a new marker inside a journal entry."""
-    entry = JournalEntry.query.get_or_404(entry_id)
+    entry = db.get_or_404(JournalEntry, entry_id)
     data = request.json
     
     new_marker = Marker(
@@ -332,7 +376,7 @@ def create_marker(entry_id):
 @app.route('/api/markers/<int:marker_id>', methods=['PUT'])
 def update_marker(marker_id):
     """Update a marker's state or reminder."""
-    marker = Marker.query.get_or_404(marker_id)
+    marker = db.get_or_404(Marker, marker_id)
     data = request.json
 
     if 'state' in data:
@@ -353,7 +397,7 @@ def update_marker(marker_id):
 @app.route('/api/markers/reminders', methods=['GET'])
 def get_reminders():
     """Get all open markers."""
-    markers = Marker.query.filter(
+    markers = db.session.query(Marker).filter(
         Marker.state == 'OPEN'
     ).order_by(Marker.created_at.asc()).all()
     
@@ -384,7 +428,9 @@ def search_items():
     from_date = request.args.get('from', '')
     to_date = request.args.get('to', '')
 
-    query = WorkItem.query
+    query = db.session.query(WorkItem).options(
+        joinedload(WorkItem.entries).joinedload(JournalEntry.markers)
+    )
 
     # Filter by state
     if states:
@@ -408,11 +454,13 @@ def search_items():
 
     # Text search: match heading OR any entry title/content
     if q:
-        heading_filter = WorkItem.heading.ilike(f'%{q}%')
+        # Escape LIKE wildcard characters to prevent unintended pattern matching
+        q_escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        heading_filter = WorkItem.heading.ilike(f'%{q_escaped}%', escape='\\')
         entry_filter = WorkItem.entries.any(
             db.or_(
-                JournalEntry.title.ilike(f'%{q}%'),
-                JournalEntry.content.ilike(f'%{q}%')
+                JournalEntry.title.ilike(f'%{q_escaped}%', escape='\\'),
+                JournalEntry.content.ilike(f'%{q_escaped}%', escape='\\')
             )
         )
         query = query.filter(db.or_(heading_filter, entry_filter))
@@ -459,7 +507,7 @@ def upload_file():
         return jsonify({'error': 'No selected file'}), 400
 
     filename = secure_filename(file.filename)
-    unique_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
+    unique_filename = f"{uuid.uuid4().hex[:12]}_{filename}"
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
     file.save(filepath)
 
@@ -476,11 +524,18 @@ def upload_file():
 @app.route('/api/open/<path:filename>', methods=['GET'])
 def open_local_file(filename):
     """Open a file using the system's default application (Windows only)."""
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    if os.path.exists(filepath):
-        os.startfile(filepath)
+    upload_folder_abs = os.path.abspath(app.config['UPLOAD_FOLDER'])
+    filepath_abs = os.path.abspath(os.path.join(upload_folder_abs, filename))
+    
+    # Path traversal check using commonpath for robustness
+    if os.path.commonpath([filepath_abs, upload_folder_abs]) != upload_folder_abs:
+        return jsonify({'error': 'Invalid file path'}), 403
+
+    if os.path.exists(filepath_abs):
+        os.startfile(filepath_abs)
         return jsonify({'status': 'opened natively'})
     return jsonify({'error': 'File not found'}), 404
+
 
 # ============================================================================
 # ENTRY POINT

@@ -1,6 +1,10 @@
+# App
 Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
 
-pytest==8.3.4
-pytest-playwright==0.6.2
-playwright==1.49.1
+# Tests
+pytest==9.0.3
+
+# Optional: Browser tests (install manually if needed)
+# pytest-playwright==0.6.2
+# playwright==1.49.1

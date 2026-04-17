@@ -15,6 +15,7 @@
     --state-memo: #3b82f6;
     --state-done: #16a34a;
     /* Darker green */
+    --accent-success: #4ade80;
 
     --active-entry-bg: rgba(37, 99, 235, 0.08);
 
@@ -38,6 +39,7 @@
     --state-wip: #facc15;
     --state-memo: #3b82f6;
     --state-done: #22c55e;
+    --accent-success: #4ade80;
 
     --active-entry-bg: rgba(17, 116, 141, 0.178);
 
