@@ -56,9 +56,9 @@ class WorkItem(db.Model):
             'id': self.id,
             'heading': self.heading,
             'state': self.state,
-            'created_at': self.created_at.isoformat(),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
             'memo_folder_id': self.memo_folder_id,
-            'entries': [entry.to_dict(exclude_content=exclude_content) for entry in self.entries]
+            'entries': [entry.to_dict(exclude_content=exclude_content) for entry in sorted(self.entries, key=lambda e: e.created_at.isoformat() if e.created_at else "")]
         }
 
 
