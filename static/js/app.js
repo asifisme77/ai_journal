@@ -61,9 +61,22 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('theme', newTheme);
             console.log("Theme switched to", newTheme);
             
-            // Allow CSS to render slightly before reload so user sees feedback
-            setTimeout(() => { window.location.reload(); }, 50);
+            const themeBtn = document.getElementById('theme-toggle');
+            if (themeBtn) {
+                themeBtn.innerHTML = newTheme === 'light' ? '<i class="ph ph-moon"></i>' : '<i class="ph ph-sun"></i>';
+            }
+
+            // Update TinyMCE skin and content CSS dynamically
+            document.querySelectorAll('link[href*="tinymce"]').forEach(link => {
+                if (newTheme === 'light') {
+                    link.href = link.href.replace('/oxide-dark/', '/oxide/').replace('/content/dark/', '/content/default/');
+                } else {
+                    link.href = link.href.replace('/oxide/', '/oxide-dark/').replace('/content/default/', '/content/dark/');
+                }
+            });
         };
+
+        themeBtn.addEventListener('click', window.toggleTheme);
     }
 
     /**
@@ -598,8 +611,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="work-item-title-group">
                     <i class="ph ph-caret-down toggle-icon"></i>
                     <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; margin-right: 1rem;">
-                        <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)" onclick="event.stopPropagation()">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0;"><i class="ph ph-clock"></i> ${timeStr}${folderPathHtml}</div>
+                        <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)">
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0;"><i class="ph ph-clock"></i> ${timeStr}${folderPathHtml}</div>
                     </div>
                 </div>
                 <div class="item-actions" onclick="event.stopPropagation()">
@@ -622,8 +635,20 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         // Toggle expand/collapse on header click
-        div.querySelector('.work-item-header').addEventListener('click', () => {
-            div.classList.toggle('expanded');
+        div.querySelector('.work-item-header').addEventListener('click', (e) => {
+            // Ignore clicks on buttons/selects (these handle their own logic)
+            if (e.target.closest('button') || e.target.closest('select')) return;
+
+            const isInput = e.target.tagName === 'INPUT';
+            const isExpanded = div.classList.contains('expanded');
+            
+            if (isInput) {
+                if (!isExpanded) {
+                    div.classList.add('expanded');
+                }
+            } else {
+                div.classList.toggle('expanded');
+            }
         });
 
         if (prepend) {
@@ -1144,9 +1169,9 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     entryDiv.innerHTML = `
         <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px; cursor: pointer;">
             <i class="ph ph-caret-down entry-toggle-icon"></i>
-            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onclick="event.stopPropagation()" onfocus="this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
+            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onfocus="this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
             <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
-                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-right: 0.25rem;">
+                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-main); color: var(--text-muted); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-right: 0.25rem;">
                     <option value="" ${!entry.status ? 'selected' : ''}>NONE</option>
                     <option value="FOLLOWUP" ${entry.status === 'FOLLOWUP' ? 'selected' : ''}>FOLLOWUP</option>
                     <option value="DONE" ${entry.status === 'DONE' ? 'selected' : ''}>DONE</option>
@@ -1172,8 +1197,22 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
 
     // Toggle expand/collapse on header click
     entryDiv.querySelector('.entry-header').addEventListener('click', (e) => {
+        // Stop propagation to prevent nested clicks from firing parent events
+        // However, do not stop it if we are clicking a button/select that needs to trigger its own global handler
+        if (e.target.closest('button') || e.target.closest('select')) return;
+
         e.stopPropagation();
-        entryDiv.classList.toggle('expanded');
+        
+        const isInput = e.target.tagName === 'INPUT';
+        const isExpanded = entryDiv.classList.contains('expanded');
+        
+        if (isInput) {
+            if (!isExpanded) {
+                entryDiv.classList.add('expanded');
+            }
+        } else {
+            entryDiv.classList.toggle('expanded');
+        }
     });
 
     // Initialize TinyMCE on next tick (element must be in DOM first)

@@ -1,53 +1,4 @@
-:root[data-theme="light"] {
-    --bg-color: #f1f5f9;
-    --surface-color: rgba(255, 255, 255, 0.85);
-    --surface-hover: rgba(226, 232, 240, 0.9);
-    --border-color: rgba(0, 0, 0, 0.15);
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --primary-color: #2563eb;
-    --danger-color: #ef4444;
-    --primary-hover: #1d4ed8;
-
-    --state-todo: #ef4444;
-    --state-wip: #eab308;
-    /* Darker yellow */
-    --state-memo: #3b82f6;
-    --state-done: #16a34a;
-    /* Darker green */
-    --accent-success: #4ade80;
-
-    --active-entry-bg: rgba(37, 99, 235, 0.08);
-
-    --task-header-bg: rgba(226, 232, 240, 0.9);
-    --entry-header-bg: rgba(241, 245, 249, 0.9);
-    --editor-bg: rgba(255, 255, 255, 0.9);
-}
-
-:root {
-    --bg-color: #0d1117;
-    --surface-color: rgba(30, 41, 59, 0.7);
-    --surface-hover: rgba(51, 65, 85, 0.8);
-    --border-color: rgba(255, 255, 255, 0.1);
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --primary-color: #3b82f6;
-    --danger-color: #ef4444;
-    --primary-hover: #2563eb;
-
-    --state-todo: #ef4444;
-    --state-wip: #facc15;
-    --state-memo: #3b82f6;
-    --state-done: #22c55e;
-    --accent-success: #4ade80;
-
-    --active-entry-bg: rgba(17, 116, 141, 0.178);
-
-    /* Visual hierarchy colors */
-    --task-header-bg: rgba(30, 41, 59, 0.8);
-    --entry-header-bg: rgba(51, 65, 85, 0.4);
-    --editor-bg: rgba(15, 23, 42, 0.6);
-}
+/* Theme colors have been migrated to theme.css for easier configuration */
 
 * {
     box-sizing: border-box;
@@ -58,8 +9,8 @@
 body {
     font-family: 'Inter', sans-serif;
     font-size: 0.73rem;
-    background-color: var(--bg-color);
-    color: var(--text-primary);
+    background-color: var(--app-background);
+    color: var(--text-main);
     line-height: 1.35;
     min-height: 100vh;
     background-image:
@@ -86,7 +37,7 @@ body {
 }
 
 .sidebar {
-    width: 280px;
+    width: 320px;
     flex-shrink: 0;
     position: sticky;
     top: 2rem;
@@ -101,13 +52,13 @@ body {
     top: -1rem;
     z-index: 20;
     margin-bottom: 1.5rem;
-    background: var(--bg-color);
+    background: var(--app-background);
     /* Solid color to prevent overlapping text */
     margin-left: -1rem;
     margin-right: -1rem;
     margin-top: -1rem;
     padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-main);
 }
 
 .search-quick {
@@ -119,14 +70,14 @@ body {
 }
 
 .search-quick i {
-    color: var(--text-secondary);
+    color: var(--text-muted);
 }
 
 #search-input {
     flex-grow: 1;
     background: transparent;
     border: none;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 0.85rem;
     outline: none;
     padding: 0.25rem 0;
@@ -135,7 +86,7 @@ body {
 .search-action-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 4px;
@@ -147,12 +98,12 @@ body {
 .search-action-btn:hover {
     background: rgba(255, 255, 255, 0.05);
     /* will fallback smoothly */
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .search-advanced {
     padding: 0.75rem;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-main);
     background: rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
@@ -173,7 +124,7 @@ body {
 .search-field label {
     font-size: 0.7rem;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -187,7 +138,7 @@ body {
 .search-state-chips label {
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--text-primary);
+    color: var(--text-main);
     background: rgba(255, 255, 255, 0.05);
     padding: 0.2rem 0.5rem;
     border-radius: 4px;
@@ -207,25 +158,25 @@ body {
 .search-state-chips label:has(input[value="TODO"]:checked) {
     background: rgba(239, 68, 68, 0.1);
     border-color: rgba(239, 68, 68, 0.3);
-    color: var(--state-todo);
+    color: var(--status-todo-color);
 }
 
 .search-state-chips label:has(input[value="WIP"]:checked) {
     background: rgba(250, 204, 21, 0.1);
     border-color: rgba(250, 204, 21, 0.3);
-    color: var(--state-wip);
+    color: var(--status-wip-color);
 }
 
 .search-state-chips label:has(input[value="MEMO"]:checked) {
     background: rgba(59, 130, 246, 0.1);
     border-color: rgba(59, 130, 246, 0.3);
-    color: var(--state-memo);
+    color: var(--status-memo-color);
 }
 
 .search-state-chips label:has(input[value="DONE"]:checked) {
     background: rgba(34, 197, 94, 0.1);
     border-color: rgba(34, 197, 94, 0.3);
-    color: var(--state-done);
+    color: var(--status-done-color);
 }
 
 .search-dates {
@@ -236,16 +187,16 @@ body {
 
 .search-dates input {
     background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 4px;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 0.75rem;
     padding: 0.25rem 0.4rem;
     width: 100%;
 }
 
 .search-dates span {
-    color: var(--text-secondary);
+    color: var(--text-muted);
 }
 
 .search-actions {
@@ -264,7 +215,7 @@ body {
 .sidebar-section-caret {
     transition: transform 0.2s ease;
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
 }
 
 .sidebar-section.open .sidebar-section-caret {
@@ -284,7 +235,7 @@ body {
     font-size: 1.1rem;
     margin-bottom: 0;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-main);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -301,10 +252,10 @@ body {
     margin-bottom: 1.5rem;
     padding: 1.25rem;
     border-radius: 16px;
-    background: var(--surface-color);
+    background: var(--panel-background);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
@@ -323,14 +274,14 @@ body {
 }
 
 .glass-header p {
-    color: var(--text-secondary);
+    color: var(--text-muted);
 }
 
 .glass-panel {
-    background: var(--surface-color);
+    background: var(--panel-background);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 12px;
     padding: 1rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -348,22 +299,22 @@ body {
 #add-item-form input {
     flex-grow: 1;
     background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 0.9rem;
     outline: none;
     transition: all 0.3s ease;
 }
 
 #add-item-form input:focus {
-    border-color: var(--primary-color);
+    border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .btn-primary {
-    background: var(--primary-color);
+    background: var(--accent-primary);
     color: white;
     border: none;
     border-radius: 8px;
@@ -378,7 +329,7 @@ body {
 }
 
 .btn-primary:hover {
-    background: var(--primary-hover);
+    background: var(--accent-primary-hover);
     transform: translateY(-1px);
 }
 
@@ -390,8 +341,8 @@ body {
 }
 
 .work-item {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    background: var(--panel-background);
+    border: 1px solid var(--border-main);
     border-radius: 12px;
     overflow: visible;
     transition: all 0.3s ease;
@@ -402,7 +353,7 @@ body {
 
 .work-item:focus-within {
     z-index: 100;
-    border-color: var(--primary-color);
+    border-color: var(--accent-primary);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
@@ -430,7 +381,7 @@ body {
     padding: 0.35rem 0.6rem;
     cursor: pointer;
     user-select: none;
-    background: var(--task-header-bg);
+    background: var(--task-header-background);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -442,7 +393,7 @@ body {
 }
 
 .toggle-icon {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: transform 0.3s ease;
 }
 
@@ -458,8 +409,8 @@ body {
 
 .state-select {
     background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    border: 1px solid var(--border-main);
+    color: var(--text-main);
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
     font-size: 0.85rem;
@@ -477,40 +428,40 @@ body {
 }
 
 .state-TODO {
-    color: var(--state-todo);
+    color: var(--status-todo-color);
 }
 
 .state-WIP {
-    color: var(--state-wip);
+    color: var(--status-wip-color);
 }
 
 .state-MEMO {
-    color: var(--state-memo);
+    color: var(--status-memo-color);
 }
 
 .state-DONE {
-    color: var(--state-done);
+    color: var(--status-done-color);
 }
 
 .state-select option {
-    background: var(--bg-color);
+    background: var(--app-background);
     font-weight: 600;
 }
 
 .state-select option[value="TODO"] {
-    color: var(--state-todo);
+    color: var(--status-todo-color);
 }
 
 .state-select option[value="WIP"] {
-    color: var(--state-wip);
+    color: var(--status-wip-color);
 }
 
 .state-select option[value="MEMO"] {
-    color: var(--state-memo);
+    color: var(--status-memo-color);
 }
 
 .state-select option[value="DONE"] {
-    color: var(--state-done);
+    color: var(--status-done-color);
 }
 
 .work-item.expanded {
@@ -537,17 +488,17 @@ body {
 
 .work-item.expanded .content-inner {
     padding: 0.3rem 0.4rem;
-    border-top-color: var(--border-color);
+    border-top-color: var(--border-main);
     overflow: visible;
 }
 
 .content-textarea {
     width: 100%;
     background: rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 8px;
     padding: 0.75rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-family: inherit;
     resize: vertical;
     min-height: 100px;
@@ -557,7 +508,7 @@ body {
 }
 
 .content-textarea:focus {
-    border-color: var(--primary-color);
+    border-color: var(--accent-primary);
 }
 
 .item-actions {
@@ -604,7 +555,7 @@ body {
     align-items: center;
     margin-bottom: 0.15rem;
     padding: 0.15rem 0.4rem;
-    background: var(--entry-header-bg);
+    background: var(--journal-header-background);
     border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.05);
     min-width: 0;
@@ -613,7 +564,7 @@ body {
 .entry-title-input {
     background: transparent;
     border: 1px solid transparent;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-size: 0.8rem;
     font-weight: 500;
     padding: 0.25rem 0.5rem;
@@ -627,20 +578,20 @@ body {
 
 .journal-entry.editing-active .entry-title-input {
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .entry-title-input:focus {
     background: rgba(59, 130, 246, 0.08);
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .item-title-input {
     background: transparent;
     border: 1px solid transparent;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 0.85rem;
     font-weight: 700;
     padding: 0.1rem 0.25rem;
@@ -660,14 +611,14 @@ body {
 }
 
 .work-item.task-editing-active .item-title-input {
-    color: var(--primary-color);
+    color: var(--accent-primary);
 }
 
 .item-title-input:focus {
     background: rgba(59, 130, 246, 0.08);
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .work-item-folder-path {
@@ -687,13 +638,13 @@ body {
 
 .entry-date {
     font-size: 0.8rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     white-space: nowrap;
 }
 
 /* Entry Toggle & Collapse */
 .entry-toggle-icon {
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: transform 0.3s ease;
     flex-shrink: 0;
     font-size: 0.9rem;
@@ -740,8 +691,8 @@ body {
 
 .btn-ghost {
     background: transparent;
-    border: 1px dashed var(--border-color);
-    color: var(--text-secondary);
+    border: 1px dashed var(--border-main);
+    color: var(--text-muted);
     padding: 0.75rem;
     width: 100%;
     border-radius: 8px;
@@ -752,8 +703,8 @@ body {
 
 .btn-ghost:hover {
     background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
-    border-color: var(--text-secondary);
+    color: var(--text-main);
+    border-color: var(--text-muted);
 }
 
 /* Floating Toolbar */
@@ -765,9 +716,9 @@ body {
     display: none;
     flex-wrap: wrap;
     gap: 0.25rem;
-    background: var(--bg-color);
+    background: var(--app-background);
     /* Need solid background instead of blur */
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 8px;
     padding: 0.5rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -777,11 +728,11 @@ body {
 .tinymce-editor {
     border: 1px solid rgba(255, 255, 255, 0.03);
     border-radius: 6px;
-    background: var(--editor-bg);
+    background: var(--editor-background);
     padding: 8px 10px 8px 24px;
     min-height: 20px;
     outline: none;
-    color: var(--text-primary);
+    color: var(--text-main);
     font-size: 11.5px;
     transition: all 0.2s;
     overflow-wrap: break-word;
@@ -816,8 +767,8 @@ a.embedded-file:hover {
 }
 
 .tinymce-editor:focus-within {
-    border-color: var(--primary-color);
-    background: var(--active-entry-bg);
+    border-color: var(--accent-primary);
+    background: var(--active-journal-bg);
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
 }
 
@@ -867,14 +818,14 @@ a.embedded-file:hover {
 /* Resize hover: highlight the right border to show it's draggable */
 .tinymce-editor td.cell-resize-hover,
 .tinymce-editor th.cell-resize-hover {
-    border-right: 2px solid var(--primary-color);
+    border-right: 2px solid var(--accent-primary);
     cursor: col-resize;
 }
 
 /* Active drag: accent color on the entire column being resized */
 .tinymce-editor td.cell-resizing,
 .tinymce-editor th.cell-resizing {
-    border-right: 2px solid var(--primary-color);
+    border-right: 2px solid var(--accent-primary);
     background: rgba(59, 130, 246, 0.06);
 }
 
@@ -997,7 +948,7 @@ a.embedded-file:hover {
 }
 
 .tox .tox-tbtn {
-    color: var(--text-primary) !important;
+    color: var(--text-main) !important;
 }
 
 .tox .tox-tbtn:hover {
@@ -1005,7 +956,7 @@ a.embedded-file:hover {
 }
 
 .tox .tox-tbtn svg {
-    fill: var(--text-primary) !important;
+    fill: var(--text-main) !important;
 }
 
 .tox .tox-statusbar {
@@ -1030,7 +981,7 @@ a.embedded-file:hover {
 
 /* Table column resizing */
 .mce-content-body .mce-resize-bar {
-    background: var(--primary-color) !important;
+    background: var(--accent-primary) !important;
     opacity: 0.7 !important;
     width: 3px !important;
     cursor: col-resize !important;
@@ -1040,12 +991,12 @@ a.embedded-file:hover {
 
 .mce-content-body .mce-resize-bar:hover {
     opacity: 1 !important;
-    background: var(--primary-hover) !important;
+    background: var(--accent-primary-hover) !important;
 }
 
 .mce-content-body .mce-table-resize-handle {
-    background: var(--primary-color) !important;
-    border: 1px solid var(--border-color) !important;
+    background: var(--accent-primary) !important;
+    border: 1px solid var(--border-main) !important;
     z-index: 1001 !important;
 }
 
@@ -1057,8 +1008,8 @@ a.embedded-file:hover {
 
 .btn-secondary {
     background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
+    border: 1px solid var(--border-main);
+    color: var(--text-muted);
     border-radius: 6px;
     padding: 0.5rem 1rem;
     cursor: pointer;
@@ -1068,7 +1019,7 @@ a.embedded-file:hover {
 
 .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .btn-danger {
@@ -1083,7 +1034,7 @@ a.embedded-file:hover {
 
 .loading-state {
     text-align: center;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     padding: 2rem;
     font-size: 1.1rem;
     display: flex;
@@ -1120,7 +1071,7 @@ details.timeline-month {
 .sidebar details>summary::before {
     content: "\25B6";
     font-size: 0.7em;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: transform 0.2s;
     display: inline-block;
 }
@@ -1132,16 +1083,16 @@ details.timeline-month {
 details.timeline-year>summary {
     font-size: 1.05rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--text-main);
     padding-bottom: 0.25rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-main);
     margin-bottom: 0.5rem;
 }
 
 details.timeline-month>summary {
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-main);
     margin-left: 0.25rem;
 }
 
@@ -1157,7 +1108,7 @@ details.timeline-date>summary {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-secondary);
+    color: var(--text-muted);
 }
 
 .timeline-date-content {
@@ -1166,7 +1117,7 @@ details.timeline-date>summary {
 
 .timeline-item {
     background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-main);
     border-radius: 6px;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
@@ -1181,19 +1132,19 @@ details.timeline-date>summary {
 }
 
 .timeline-item-todo {
-    border-left-color: var(--state-todo);
+    border-left-color: var(--status-todo-color);
 }
 
 .timeline-item-wip {
-    border-left-color: var(--state-wip);
+    border-left-color: var(--status-wip-color);
 }
 
 .timeline-item-memo {
-    border-left-color: var(--state-memo);
+    border-left-color: var(--status-memo-color);
 }
 
 .timeline-item-done {
-    border-left-color: var(--state-done);
+    border-left-color: var(--status-done-color);
 }
 
 .timeline-item-archived {
@@ -1203,7 +1154,7 @@ details.timeline-date>summary {
 .timeline-task {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     margin-bottom: 0.25rem;
     white-space: nowrap;
     overflow: hidden;
@@ -1212,7 +1163,7 @@ details.timeline-date>summary {
 
 .timeline-entry-title {
     font-size: 0.85rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     display: flex;
     justify-content: space-between;
     gap: 0.5rem;
@@ -1229,7 +1180,7 @@ details.timeline-date>summary {
 
 .timeline-time {
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 
@@ -1255,8 +1206,8 @@ details.timeline-date>summary {
     margin-top: 3rem;
     margin-bottom: 1rem;
     font-size: 1.2rem;
-    color: var(--text-secondary);
-    border-bottom: 1px dashed var(--border-color);
+    color: var(--text-muted);
+    border-bottom: 1px dashed var(--border-main);
     padding-bottom: 0.5rem;
     display: none;
     align-items: center;
@@ -1321,11 +1272,11 @@ details.timeline-date>summary {
 }
 
 .entry-toolbar-container .tox-tbtn svg {
-    fill: var(--text-secondary) !important;
+    fill: var(--text-muted) !important;
 }
 
 .entry-toolbar-container .tox-tbtn:hover svg {
-    fill: var(--text-primary) !important;
+    fill: var(--text-main) !important;
 }
 
 .entry-toolbar-container .tox-tbtn--enabled {
@@ -1333,7 +1284,7 @@ details.timeline-date>summary {
 }
 
 .entry-toolbar-container .tox-tbtn--enabled svg {
-    fill: var(--primary-color) !important;
+    fill: var(--accent-primary) !important;
 }
 
 .entry-toolbar-container .tox-tbtn--select {
@@ -1383,7 +1334,7 @@ details.timeline-date>summary {
 }
 
 .marker-bubble.has-reminder {
-    background-color: var(--danger-color);
+    background-color: var(--accent-danger);
     color: #fff;
 }
 
@@ -1395,8 +1346,8 @@ details.timeline-date>summary {
 .marker-popover {
     position: fixed;
     z-index: 2000;
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    background: var(--panel-background);
+    border: 1px solid var(--border-main);
     border-radius: 8px;
     width: 220px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
@@ -1430,7 +1381,7 @@ details.timeline-date>summary {
 .btn-close {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 1rem;
     display: flex;
@@ -1439,7 +1390,7 @@ details.timeline-date>summary {
 }
 
 .btn-close:hover {
-    color: var(--danger-color);
+    color: var(--accent-danger);
 }
 
 /* Timeline Markers */
@@ -1452,7 +1403,7 @@ details.timeline-date>summary {
 
 .timeline-marker-details summary {
     font-size: 0.7rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     margin-bottom: 0.2rem;
 }
@@ -1465,13 +1416,13 @@ details.timeline-date>summary {
     cursor: pointer;
     border-radius: 4px;
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: background 0.2s;
 }
 
 .timeline-marker-item:hover {
     background: rgba(250, 204, 21, 0.1);
-    color: var(--text-primary);
+    color: var(--text-main);
 }
 
 .timeline-marker-bubble {
@@ -1484,7 +1435,7 @@ details.timeline-date>summary {
 }
 
 .timeline-marker-bubble.has-reminder {
-    background-color: var(--danger-color);
+    background-color: var(--accent-danger);
 }
 
 .timeline-marker-text {
@@ -1514,7 +1465,7 @@ details.timeline-date>summary {
 }
 
 .reminder-item.is-overdue {
-    border-left-color: var(--danger-color);
+    border-left-color: var(--accent-danger);
     background: rgba(239, 68, 68, 0.08);
     animation: overdue-pulse 2s infinite alternate ease-in-out;
     border-left-width: 4px;
@@ -1542,7 +1493,7 @@ details.timeline-date>summary {
 
 .reminder-item-text {
     font-size: 0.8rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     margin-bottom: 0.25rem;
     white-space: nowrap;
     overflow: hidden;
@@ -1551,7 +1502,7 @@ details.timeline-date>summary {
 
 .reminder-item-meta {
     font-size: 0.7rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1566,7 +1517,7 @@ details.timeline-date>summary {
 }
 
 .reminder-item.is-overdue .reminder-item-time {
-    color: var(--danger-color);
+    color: var(--accent-danger);
 }
 
 /* --- SIDEBAR RESIZER --- */
@@ -1654,7 +1605,7 @@ details.timeline-date>summary {
 
 .memo-folder-caret {
     font-size: 0.8rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     transition: transform 0.2s;
 }
 
@@ -1671,7 +1622,7 @@ details.timeline-date>summary {
     flex-grow: 1;
     font-weight: 600;
     font-size: 0.8rem;
-    color: var(--text-primary);
+    color: var(--text-main);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1691,7 +1642,7 @@ details.timeline-date>summary {
 .memo-folder-delete-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 0.85rem;
     padding: 2px;
@@ -1702,12 +1653,12 @@ details.timeline-date>summary {
 }
 
 .memo-folder-add-sub-btn:hover {
-    color: var(--primary-color);
+    color: var(--accent-primary);
     background: rgba(59, 130, 246, 0.1);
 }
 
 .memo-folder-delete-btn:hover {
-    color: var(--danger-color);
+    color: var(--accent-danger);
     background: rgba(239, 68, 68, 0.1);
 }
 
@@ -1751,7 +1702,7 @@ details.timeline-date>summary {
 
 .memo-item-icon {
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     flex-shrink: 0;
     margin-top: 2px;
 }
@@ -1766,7 +1717,7 @@ details.timeline-date>summary {
 
 .memo-item-title {
     font-size: 0.72rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
@@ -1774,7 +1725,7 @@ details.timeline-date>summary {
 }
 
 .memo-item-title:hover {
-    color: var(--text-primary);
+    color: var(--text-main);
     text-decoration: underline;
 }
 
@@ -1896,7 +1847,7 @@ details.timeline-date>summary {
 
 .memo-empty-folder {
     font-size: 0.7rem;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     font-style: italic;
     padding: 0.2rem 0.5rem;
 }
@@ -1904,7 +1855,7 @@ details.timeline-date>summary {
 .memo-add-folder-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 2px;
     font-size: 1rem;
@@ -1917,7 +1868,7 @@ details.timeline-date>summary {
 }
 
 .memo-add-folder-btn:hover {
-    color: var(--text-primary);
+    color: var(--text-main);
     background: rgba(255, 255, 255, 0.05);
 }
 
@@ -1927,14 +1878,14 @@ details.timeline-date>summary {
     gap: 0.3rem;
     padding: 0.5rem 1rem;
     background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-main);
 }
 
 .memo-folder-input {
     flex-grow: 1;
     background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    border: 1px solid var(--border-main);
+    color: var(--text-main);
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -1942,13 +1893,13 @@ details.timeline-date>summary {
 }
 
 .memo-folder-input-error {
-    border-color: var(--danger-color) !important;
+    border-color: var(--accent-danger) !important;
     animation: shake 0.3s ease-in-out;
-    color: var(--danger-color) !important;
+    color: var(--accent-danger) !important;
 }
 
 .memo-folder-input-error::placeholder {
-    color: var(--danger-color);
+    color: var(--accent-danger);
     opacity: 0.8;
 }
 
@@ -2011,7 +1962,7 @@ details.timeline-date>summary {
     background: rgba(0, 0, 0, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 5px;
-    color: var(--text-primary);
+    color: var(--text-main);
     padding: 0.4rem 0.6rem;
     font-size: 0.82rem;
     font-family: inherit;
@@ -2021,7 +1972,7 @@ details.timeline-date>summary {
 }
 
 .link-modal-input:focus {
-    border-color: var(--primary-color, #7c3aed);
+    border-color: var(--accent-primary, #7c3aed);
     box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.22);
 }
 

@@ -1,0 +1,74 @@
+/* 
+ * UI Color Theme Configuration
+ * Readily configure Lite and Dark modes by adjusting these CSS Variables.
+ */
+
+/* ============================
+   LIGHT MODE SETTINGS
+============================ */
+:root[data-theme="light"] {
+    /* Catppuccin Latte Color Scheme */
+    --app-background: #eff1f5;
+    --panel-background: rgba(255, 255, 255, 0.7);
+    --panel-hover-background: #e6e9ef;
+    --border-main: #ccd0da;
+
+    --text-main: #4c4f69;
+    --text-muted: #6c6f85;
+
+    --accent-primary: #1e66f5;
+    /* sapphire/blue */
+    --accent-primary-hover: #04a5e5;
+    /* sky */
+    --accent-danger: #d20f39;
+    /* red */
+
+    /* Task States */
+    --status-todo-color: #d20f39;
+    /* red */
+    --status-wip-color: #df8e1d;
+    /* peach/yellow */
+    --status-memo-color: #1e66f5;
+    /* blue */
+    --status-done-color: #40a02b;
+    /* green */
+    --success-color: #40a02b;
+
+    --active-journal-bg: rgba(30, 102, 245, 0.08);
+
+    /* Visual Hierarchy */
+    --task-header-background: rgba(239, 237, 230, 0.9);
+    --journal-header-background: rgba(220, 207, 207, 0.9);
+    --editor-background: rgba(220, 228, 241, 0.621);
+}
+
+/* ============================
+   DARK MODE SETTINGS (DEFAULT)
+============================ */
+:root {
+    --app-background: #0d1117;
+    --panel-background: rgba(30, 41, 59, 0.7);
+    --panel-hover-background: rgba(51, 65, 85, 0.8);
+    --border-main: rgba(255, 255, 255, 0.1);
+
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+
+    --accent-primary: #3b82f6;
+    --accent-primary-hover: #2563eb;
+    --accent-danger: #ef4444;
+
+    /* Task States */
+    --status-todo-color: #ef4444;
+    --status-wip-color: #facc15;
+    --status-memo-color: #3b82f6;
+    --status-done-color: #22c55e;
+    --success-color: #4ade80;
+
+    --active-journal-bg: rgba(17, 116, 141, 0.178);
+
+    /* Visual Hierarchy */
+    --task-header-background: rgba(30, 41, 59, 0.8);
+    --journal-header-background: rgba(51, 65, 85, 0.4);
+    --editor-background: rgba(15, 23, 42, 0.6);
+}
