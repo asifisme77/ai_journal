@@ -48,4 +48,11 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
+
+## Documentation
+
+Additional project documentation is available in the `docs/` directory:
+- `docs/SETUP.md` - Detailed setup and development guide
+- `docs/PROJECT_OVERVIEW.md` - Technical architecture overview
+- `docs/README.md` - Documentation index
 3. Open `http://127.0.0.1:5000` in your web browser. A local `journal.db` SQLite file will automatically establish itself in your root directory upon initialization alongside your tables.

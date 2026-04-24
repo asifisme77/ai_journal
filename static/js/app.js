@@ -44,23 +44,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!themeBtn) return;
 
         // Set initial icon
-        themeBtn.innerHTML = document.documentElement.getAttribute('data-theme') === 'light' 
-            ? '<i class="ph ph-moon"></i>' 
+        themeBtn.innerHTML = document.documentElement.getAttribute('data-theme') === 'light'
+            ? '<i class="ph ph-moon"></i>'
             : '<i class="ph ph-sun"></i>';
-            
+
         // Expose toggle globally to ensure DOM can access it directly via onclick
-        window.toggleTheme = function(e) {
+        window.toggleTheme = function (e) {
             if (e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
             const isLight = document.documentElement.getAttribute('data-theme') === 'light';
             const newTheme = isLight ? 'dark' : 'light';
-            
+
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             console.log("Theme switched to", newTheme);
-            
+
             const themeBtn = document.getElementById('theme-toggle');
             if (themeBtn) {
                 themeBtn.innerHTML = newTheme === 'light' ? '<i class="ph ph-moon"></i>' : '<i class="ph ph-sun"></i>';
@@ -641,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isInput = e.target.tagName === 'INPUT';
             const isExpanded = div.classList.contains('expanded');
-            
+
             if (isInput) {
                 if (!isExpanded) {
                     div.classList.add('expanded');
@@ -990,7 +990,9 @@ function getOutlinerIndent(editor, block) {
  * Adds resize handles to each column that users can drag to resize.
  */
 function initResizableTableColumns(editor) {
+    console.log('initResizableTableColumns called');
     const tables = editor.dom.select('table');
+    console.log('Found tables:', tables.length);
 
     tables.forEach(function (table) {
         const rows = editor.dom.select('tr', table);
@@ -1005,7 +1007,10 @@ function initResizableTableColumns(editor) {
         rows.forEach(function (row) {
             editor.dom.select('td, th', row).forEach(function (cell) {
                 if (!cell.style.width) {
-                    cell.style.width = (100 / numCols) + '%';
+                    // Use pixels instead of percentages to allow immediate downsizing
+                    // 60% is the default table width, we distribute it among columns
+                    const tableWidth = table.offsetWidth || 600;
+                    cell.style.width = Math.floor(tableWidth / numCols) + 'px';
                 }
             });
         });
@@ -1013,87 +1018,95 @@ function initResizableTableColumns(editor) {
 
     // Add mousedown handler to the editor's entire content area
     // (only bound once via a flag to prevent duplicates)
-    if (editor._resizeColumnsInitialized) return;
+    if (editor._resizeColumnsInitialized) {
+        console.log('Table resizing already initialized');
+        return;
+    }
     editor._resizeColumnsInitialized = true;
+    console.log('Setting up table resize event listeners');
 
     // Track the currently highlighted cell for resize hover feedback
     let hoveredResizeCell = null;
 
+    /**
+     * Helper to find which column we should be resizing based on mouse position.
+     * If near the right edge of cell i, return cell i (can resize any column except possibly the last).
+     * If near the left edge of cell i (and i > 0), return cell i-1.
+     */
+    function getResizeTarget(e) {
+        const cell = editor.dom.getParent(e.target, 'td,th');
+        if (!cell) return null;
+
+        const rect = cell.getBoundingClientRect();
+        const clickX = e.clientX;
+        const nearRight = (rect.right - clickX) <= 15;
+        const nearLeft = (clickX - rect.left) <= 15;
+
+        console.log('getResizeTarget:', {
+            cell: cell,
+            rect: rect,
+            clickX: clickX,
+            nearRight: nearRight,
+            nearLeft: nearLeft,
+            rectRight: rect.right,
+            rectLeft: rect.left
+        });
+
+        const row = editor.dom.getParent(cell, 'tr');
+        const rowCells = editor.dom.select('td,th', row);
+        const cellIndex = rowCells.indexOf(cell);
+
+        if (nearRight) {
+            // If near right edge, we are resizing this cell
+            return cell;
+        } else if (nearLeft) {
+            // If near left edge, we are resizing the PREVIOUS cell (if it exists)
+            if (cellIndex > 0) return rowCells[cellIndex - 1];
+        }
+
+        return null;
+    }
+
     // ---- Hover feedback: cursor + border highlight ----
     editor.on('mousemove', function (e) {
-        const cell = editor.dom.getParent(e.target, 'td,th');
+        const targetCell = getResizeTarget(e);
 
-        // Clear previous highlight if we left the cell
-        if (hoveredResizeCell && hoveredResizeCell !== cell) {
+        // Clear previous highlight if it's different
+        if (hoveredResizeCell && hoveredResizeCell !== targetCell) {
             hoveredResizeCell.classList.remove('cell-resize-hover');
             hoveredResizeCell = null;
         }
 
-        if (!cell) {
-            editor.getBody().style.cursor = '';
-            return;
-        }
-
-        const table = editor.dom.getParent(cell, 'table');
-        if (!table) {
-            editor.getBody().style.cursor = '';
-            return;
-        }
-
-        const rect = cell.getBoundingClientRect();
-        const nearRightEdge = (rect.right - e.clientX) <= 15;
-
-        // Check it's not the last column
-        let isLastCol = false;
-        if (nearRightEdge) {
-            const row = editor.dom.getParent(cell, 'tr');
-            const rowCells = editor.dom.select('td,th', row);
-            isLastCol = (rowCells[rowCells.length - 1] === cell);
-        }
-
-        if (nearRightEdge && !isLastCol) {
+        if (targetCell) {
             editor.getBody().style.cursor = 'col-resize';
-            cell.classList.add('cell-resize-hover');
-            hoveredResizeCell = cell;
+            targetCell.classList.add('cell-resize-hover');
+            hoveredResizeCell = targetCell;
         } else {
             editor.getBody().style.cursor = '';
-            if (cell.classList.contains('cell-resize-hover')) {
+            // If we are over a cell but not near an edge, make sure it's not highlighted
+            const cell = editor.dom.getParent(e.target, 'td,th');
+            if (cell && cell.classList.contains('cell-resize-hover')) {
                 cell.classList.remove('cell-resize-hover');
             }
-            if (hoveredResizeCell === cell) hoveredResizeCell = null;
         }
     });
 
     // ---- Mousedown: initiate drag resize ----
     editor.on('mousedown', function (e) {
-        const cell = editor.dom.getParent(e.target, 'td,th');
-        if (!cell) return;
-
-        const table = editor.dom.getParent(cell, 'table');
-        if (!table) return;
-
-        // Only allow resize if clicking on the right edge (last 15px of cell)
-        const rect = cell.getBoundingClientRect();
-        const cellRightEdge = rect.right;
-        const clickX = e.clientX;
-
-        if (cellRightEdge - clickX > 15) return; // Not near the right edge
-
-        // Check if this is the last column
-        const row = editor.dom.getParent(cell, 'tr');
-        const rowCells = editor.dom.select('td,th', row);
-        let cellIndex = -1;
-        for (let i = 0; i < rowCells.length; i++) {
-            if (rowCells[i] === cell) {
-                cellIndex = i;
-                break;
-            }
+        console.log('Editor mousedown event triggered', e);
+        const cell = getResizeTarget(e);
+        if (!cell) {
+            console.log('No resize target found');
+            return;
         }
 
-        if (cellIndex === rowCells.length - 1) return; // No resize on last column
-
+        console.log('Starting resize for cell:', cell);
         e.preventDefault();
         e.stopPropagation();
+
+        const row = editor.dom.getParent(cell, 'tr');
+        const rowCells = editor.dom.select('td,th', row);
+        const cellIndex = rowCells.indexOf(cell);
 
         const startX = e.clientX;
         const startWidth = cell.offsetWidth;
@@ -1109,17 +1122,62 @@ function initResizableTableColumns(editor) {
             }
         });
 
+        // Determine which column to adjust (the next one, or the previous if we're at the edge)
+        let adjacentColCells = [];
+        let adjacentCellIndex = cellIndex + 1; // Default: adjust the next column
+
+        // If we're resizing the last column, adjust the previous column instead
+        if (cellIndex === rowCells.length - 1) {
+            adjacentCellIndex = cellIndex - 1;
+        }
+
+        // Get cells for the adjacent column
+        if (adjacentCellIndex >= 0 && adjacentCellIndex < rowCells.length) {
+            tableRows.forEach(function (row) {
+                const cells = editor.dom.select('td,th', row);
+                if (cells[adjacentCellIndex]) {
+                    adjacentColCells.push(cells[adjacentCellIndex]);
+                }
+            });
+        }
+
+        const startAdjacentWidth = adjacentColCells.length > 0 ? adjacentColCells[0].offsetWidth : 0;
+
         // Add active resize class to all cells in the column
         colCells.forEach(c => c.classList.add('cell-resizing'));
+        adjacentColCells.forEach(c => c.classList.add('cell-resizing'));
 
         // Force col-resize cursor on the entire body during drag
         document.body.style.cursor = 'col-resize';
 
         function onMouseMove(e) {
+            console.log('Mouse move during resize:', e.clientX, e.clientY);
             const diff = e.clientX - startX;
             const newWidth = Math.max(30, startWidth + diff);
-            colCells.forEach(function (cell) {
-                cell.style.width = newWidth + 'px';
+            const widthDiff = newWidth - startWidth;
+
+            // Calculate new width for adjacent column to maintain total width
+            const newAdjacentWidth = Math.max(30, startAdjacentWidth - widthDiff);
+
+            console.log('New widths:', newWidth, newAdjacentWidth);
+
+            // Use a transaction or block updates to avoid interfering with other elements
+            editor.undoManager.transact(() => {
+                // Update the resized column
+                colCells.forEach(function (cell) {
+                    const currentWidth = parseInt(cell.style.width, 10);
+                    if (currentWidth !== newWidth) {
+                        cell.style.width = newWidth + 'px';
+                    }
+                });
+
+                // Update the adjacent column
+                adjacentColCells.forEach(function (cell) {
+                    const currentWidth = parseInt(cell.style.width, 10);
+                    if (currentWidth !== newAdjacentWidth) {
+                        cell.style.width = newAdjacentWidth + 'px';
+                    }
+                });
             });
         }
 
@@ -1128,6 +1186,7 @@ function initResizableTableColumns(editor) {
             document.removeEventListener('mouseup', onMouseUp);
             document.body.style.cursor = '';
             colCells.forEach(c => c.classList.remove('cell-resizing'));
+            adjacentColCells.forEach(c => c.classList.remove('cell-resizing'));
             if (hoveredResizeCell) {
                 hoveredResizeCell.classList.remove('cell-resize-hover');
                 hoveredResizeCell = null;
@@ -1202,10 +1261,10 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
         if (e.target.closest('button') || e.target.closest('select')) return;
 
         e.stopPropagation();
-        
+
         const isInput = e.target.tagName === 'INPUT';
         const isExpanded = entryDiv.classList.contains('expanded');
-        
+
         if (isInput) {
             if (!isExpanded) {
                 entryDiv.classList.add('expanded');
@@ -1307,7 +1366,7 @@ function initTinyMCE(entry, autoFocus = false) {
                 blocks.forEach(block => {
                     const indentPx = getBlockIndent(editor, block);
                     const spacesCount = Math.round(indentPx / 20) * SPACES_PER_INDENT;
-                    
+
                     if (spacesCount > 0) {
                         const indentChars = ' '.repeat(spacesCount);
                         const textNode = document.createTextNode(indentChars);
@@ -1716,15 +1775,15 @@ function initTinyMCE(entry, autoFocus = false) {
                     const pStyle = indent > 0 ? ` style="padding-left: ${indent}px;"` : '';
 
                     // Capture current text selection to place inside the log block
-                    let selectedText = editor.selection.getContent({format: 'text'});
+                    let selectedText = editor.selection.getContent({ format: 'text' });
                     let preContent = 'Paste logs/code here...';
-                    
+
                     if (selectedText && selectedText.trim() !== '') {
                         // Encode HTML entities to prevent rendering arbitrary HTML, convert newlines to <br> for <pre>
                         preContent = selectedText.replace(/&/g, '&amp;')
-                                                 .replace(/</g, '&lt;')
-                                                 .replace(/>/g, '&gt;')
-                                                 .replace(/\n/g, '<br>');
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/\n/g, '<br>');
                     }
 
                     editor.insertContent(
@@ -1786,9 +1845,9 @@ function initTinyMCE(entry, autoFocus = false) {
                     editor.undoManager.transact(() => {
                         // 1. Insert span bookmarks to accurately track selection across node replacements
                         const bookmark = editor.selection.getBookmark(2, true);
-                        
+
                         const selectedBlocks = editor.selection.getSelectedBlocks();
-                        
+
                         selectedBlocks.forEach(block => {
                             if (!block) return;
 
@@ -1801,7 +1860,7 @@ function initTinyMCE(entry, autoFocus = false) {
                                 const ml = editor.dom.getStyle(logBlock, 'margin-left');
                                 const attrString = ml ? ` style="padding-left: ${ml};"` : '';
                                 const pre = logBlock.querySelector('pre');
-                                
+
                                 if (pre) {
                                     // Salvage any bookmark spans inside the details block that aren't in the pre
                                     const bmSpans = Array.from(logBlock.querySelectorAll('span[data-mce-type="bookmark"]'));
@@ -1821,10 +1880,10 @@ function initTinyMCE(entry, autoFocus = false) {
                                 let styleStr = '';
                                 if (pl) styleStr += `padding-left: ${pl}; `;
                                 if (ml) styleStr += `margin-left: ${ml}; `;
-                                
+
                                 const attrString = styleStr ? ` style="${styleStr.trim()}"` : '';
                                 const content = block.nodeName === 'PRE' ? block.innerHTML.replace(/\\n/g, '<br>') : block.innerHTML;
-                                
+
                                 block.outerHTML = `<p${attrString}>${content}</p>`;
                             } else {
                                 // Temporarily store indent styles for standard blocks
@@ -1846,7 +1905,7 @@ function initTinyMCE(entry, autoFocus = false) {
                         const currentBlocks = editor.selection.getSelectedBlocks();
                         currentBlocks.forEach(block => {
                             if (!block) return;
-                            
+
                             // Strip lingering links inside selection
                             const links = Array.from(block.querySelectorAll('a'));
                             links.forEach(link => {
@@ -1855,7 +1914,7 @@ function initTinyMCE(entry, autoFocus = false) {
                                     editor.dom.replace(editor.dom.create('span', {}, text), link);
                                 }
                             });
-                            
+
                             // Restore padding for standard blocks
                             if (block.hasAttribute('data-pl')) {
                                 const pl = block.getAttribute('data-pl');
@@ -2017,7 +2076,7 @@ function initTinyMCE(entry, autoFocus = false) {
                     }
                 }
 
-                // If user applies 'Preformatted' block styling to multiple paragraphs, TinyMCE 
+                // If user applies 'Preformatted' block styling to multiple paragraphs, TinyMCE
                 // splits them into multiple <pre> blocks. Merge them back tightly.
                 if (e.command === 'FormatBlock' && typeof e.value === 'string' && e.value.toLowerCase() === 'pre') {
                     editor.undoManager.transact(() => {
@@ -2048,15 +2107,15 @@ function initTinyMCE(entry, autoFocus = false) {
                                     // Make sure both have the same padding
                                     const currentPadding = parseInt(editor.dom.getStyle(current, 'padding-left') || 0, 10);
                                     const nextPadding = parseInt(editor.dom.getStyle(next, 'padding-left') || 0, 10);
-                                    
+
                                     // Only merge if they are at the same indentation level
                                     if (currentPadding === nextPadding) {
                                         current.innerHTML += '\\n' + next.innerHTML;
                                         next.remove();
-                                        
+
                                         const index = preBlocks.indexOf(next);
                                         if (index > -1) preBlocks.splice(index, 1);
-                                        
+
                                         i--; // re-check the newly merged element against upcoming siblings
                                     }
                                 }
@@ -2088,7 +2147,7 @@ function initTinyMCE(entry, autoFocus = false) {
                         return false;
                     }
 
-                    // Preemptively split <br> separated lines into distinct block tags 
+                    // Preemptively split <br> separated lines into distinct block tags
                     // before applying indent to prevent TinyMCE from shifting unselected lines
                     if (!event.shiftKey) {
                         const selectedBlocks = editor.selection.getSelectedBlocks();
@@ -2499,7 +2558,7 @@ window.focusEntry = function (entryId, isArchived, itemId, markerId = null, sear
 
     function attemptFocus() {
         const entryEl = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
-        const editor  = tinymce.get(`tinymce-${entryId}`);
+        const editor = tinymce.get(`tinymce-${entryId}`);
 
         if (!entryEl || !editor) {
             elapsed += POLL_INTERVAL_MS;
