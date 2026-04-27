@@ -399,7 +399,7 @@ def get_reminders():
     """Get all open markers."""
     markers = db.session.query(Marker).filter(
         Marker.state == 'OPEN'
-    ).order_by(Marker.created_at.asc()).all()
+    ).order_by(Marker.created_at.desc()).all()
     
     return jsonify([{
         **marker.to_dict(),

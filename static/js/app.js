@@ -1230,12 +1230,12 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
             <i class="ph ph-caret-down entry-toggle-icon"></i>
             <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onfocus="this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
             <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
-                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-main); color: var(--text-muted); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-right: 0.25rem;">
+                <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
+                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-main); color: var(--text-muted); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-left: 0.25rem;">
                     <option value="" ${!entry.status ? 'selected' : ''}>NONE</option>
                     <option value="FOLLOWUP" ${entry.status === 'FOLLOWUP' ? 'selected' : ''}>FOLLOWUP</option>
                     <option value="DONE" ${entry.status === 'DONE' ? 'selected' : ''}>DONE</option>
                 </select>
-                <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
                 ${addButtonHTML}
                 <button class="btn-secondary btn-danger btn-small" style="border: none; padding: 0.25rem;" onclick="deleteEntry(${entry.id}); event.stopPropagation()"><i class="ph ph-trash"></i></button>
             </div>
@@ -2360,7 +2360,17 @@ window.addEntry = async function (itemId) {
             });
 
             // Newly added entries are always expanded and focused
-            entriesContainer.appendChild(createEntryElement(newEntry, true, true, true));
+            const entryEl = createEntryElement(newEntry, true, true, true);
+            entriesContainer.appendChild(entryEl);
+
+            // Focus and select the default title text
+            const titleInput = entryEl.querySelector('.entry-title-input');
+            if (titleInput) {
+                setTimeout(() => {
+                    titleInput.focus();
+                    titleInput.select();
+                }, 50);
+            }
 
             // Auto-expand the parent work item
             const workItem = document.querySelector(`.work-item[data-id="${itemId}"]`);
@@ -2634,13 +2644,5 @@ window.focusEntry = function (entryId, isArchived, itemId, markerId = null, sear
     setTimeout(attemptFocus, 50);
 };
 
-/**
- * Generic escape HTML function for labels/titles
- */
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+
 
