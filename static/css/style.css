@@ -796,6 +796,16 @@ a.embedded-file:hover {
     margin: 1px 0;
 }
 
+.tinymce-editor ul,
+.tinymce-editor ol {
+    padding-left: 20px;
+    margin: 5px 0;
+}
+
+.tinymce-editor li {
+    margin-bottom: 2px;
+}
+
 .tinymce-editor pre {
     white-space: pre;
     overflow-x: auto;

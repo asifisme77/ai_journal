@@ -2132,6 +2132,33 @@ function initTinyMCE(entry, autoFocus = false) {
             // ================================================================
 
             editor.on('keydown', function (event) {
+                // Table Cell Block Escape (Arrow keys)
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    const node = editor.selection.getNode();
+                    const targetBlock = editor.dom.getParent(node, 'PRE, DETAILS');
+                    if (targetBlock && editor.dom.getParent(targetBlock, 'TD,TH')) {
+                        if (event.key === 'ArrowDown') {
+                            let next = targetBlock.nextSibling;
+                            while (next && next.nodeType === 3 && next.textContent.trim() === '') {
+                                next = next.nextSibling;
+                            }
+                            if (!next) {
+                                const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+                                editor.dom.insertAfter(p, targetBlock);
+                            }
+                        } else if (event.key === 'ArrowUp') {
+                            let prev = targetBlock.previousSibling;
+                            while (prev && prev.nodeType === 3 && prev.textContent.trim() === '') {
+                                prev = prev.previousSibling;
+                            }
+                            if (!prev) {
+                                const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+                                targetBlock.parentNode.insertBefore(p, targetBlock);
+                            }
+                        }
+                    }
+                }
+
                 if (event.keyCode === 9) {
                     event.preventDefault();
                     event.stopPropagation();
