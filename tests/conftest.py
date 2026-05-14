@@ -12,6 +12,7 @@ import threading
 import pytest
 import time
 from werkzeug.serving import make_server
+from sqlalchemy import text
 
 # Set test environment to in-memory database BEFORE importing app
 os.environ['TEST_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -31,6 +32,11 @@ def flask_app():
 
     with app.app_context():
         db.create_all()
+        # Create the FTS5 virtual table (not created by SQLAlchemy's create_all)
+        from app import FTS_CREATE
+        with db.engine.connect() as conn:
+            conn.execute(text(FTS_CREATE))
+            conn.commit()
         yield app
         db.session.remove()
         db.drop_all()

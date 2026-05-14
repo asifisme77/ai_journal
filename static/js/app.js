@@ -785,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Wire click on the whole card — markers stop propagation so they won't mis-fire
                         entryDiv.addEventListener('click', () =>
-                            window.focusEntry(entry.id, isArchived, entry.parentItem.id, null, searchTerm, entry.parentItem)
+                            window.focusEntry(entry.id, isArchived, entry.parentItem.id, null, searchTerm, entry.parentItem, entry.matched_terms)
                         );
 
                         entryDiv.querySelectorAll('.timeline-marker-item').forEach(markerEl => {
@@ -2499,19 +2499,87 @@ window.deleteEntry = async function (entryId) {
 };
 
 /**
- * Updates a work item's state (TODO/WIP/MEMO/DONE) and reloads the page.
- * Full reload is used because state changes affect filtering, sorting, and archiving.
+ * Updates a work item's state (TODO/WIP/MEMO/DONE) in-place without a page
+ * reload.  Saves any dirty TinyMCE editors first (so the 2-second auto-save
+ * debounce can't lose data), updates the state badge CSS, moves the card
+ * between active/archived containers when needed, and refreshes the sidebar.
  */
 window.updateState = async function (id, newState) {
     try {
+        // 1. Flush every dirty TinyMCE editor to the server before anything else
+        const savePromises = tinymce.get().map(editor => {
+            if (editor.isDirty()) {
+                const entryId = editor.id.split('-')[1];
+                if (entryId) {
+                    return fetch(`/api/entries/${entryId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: editor.getContent() })
+                    }).then(() => editor.setDirty(false));
+                }
+            }
+            return Promise.resolve();
+        });
+        await Promise.all(savePromises);
+
+        // 2. Send the state update to the API
         const res = await fetch(`/api/items/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ state: newState })
         });
-        if (res.ok) {
-            window.location.reload();
+        if (!res.ok) return;
+
+        // 3. Update the <select> badge styling in-place
+        const workItemEl = document.querySelector(`.work-item[data-id="${id}"]`);
+        if (workItemEl) {
+            const selectEl = workItemEl.querySelector('.state-select');
+            if (selectEl) {
+                // Strip all previous state-* classes and apply the new one
+                selectEl.className = selectEl.className.replace(/\bstate-\w+/g, '');
+                selectEl.classList.add('state-select', `state-${newState}`);
+            }
+
+            // 4. Determine if the item should be in the active or archived section
+            const isArchived = newState === 'DONE';
+            const activeContainer = document.getElementById('items-container');
+            const archivedContainer = document.getElementById('archived-container');
+            const archivedHeader = document.getElementById('archived-header');
+            const currentlyInActive = activeContainer && activeContainer.contains(workItemEl);
+
+            if (isArchived && currentlyInActive) {
+                // Move from active → archived
+                workItemEl.remove();
+
+                // Show empty-state message if the active list is now empty
+                if (activeContainer.querySelectorAll('.work-item').length === 0) {
+                    activeContainer.innerHTML = '<div class="loading-state">No active tasks. Start by adding one!</div>';
+                }
+
+                // Ensure archived section is visible and prepend the card
+                if (archivedHeader) archivedHeader.style.display = 'flex';
+                if (archivedContainer) archivedContainer.prepend(workItemEl);
+            } else if (!isArchived && archivedContainer && archivedContainer.contains(workItemEl)) {
+                // Move from archived → active
+                workItemEl.remove();
+
+                // Clear the empty-state placeholder if present
+                const placeholder = activeContainer.querySelector('.loading-state');
+                if (placeholder) placeholder.remove();
+
+                // Prepend to active list (newest-style behaviour)
+                if (activeContainer) activeContainer.prepend(workItemEl);
+
+                // Hide archived header if no archived items remain
+                if (archivedContainer.querySelectorAll('.work-item').length === 0) {
+                    if (archivedHeader) archivedHeader.style.display = 'none';
+                }
+            }
         }
+
+        // 5. Refresh the sidebar timeline (lightweight, no editor destruction)
+        if (window.refreshSidebar) window.refreshSidebar();
+
     } catch (error) {
         console.error('Error updating state:', error);
     }
@@ -2544,19 +2612,22 @@ window.deleteItem = async function (id) {
 // ============================================================================
 
 /**
- * Places the cursor on the first occurrence of `searchTerm` inside the
- * TinyMCE editor for the given entry.  Falls back gracefully if the editor
- * is not yet initialised or the term is not found.
+ * Places the cursor on the first occurrence of a search match inside the
+ * TinyMCE editor for the given entry.  When `matchedTerms` are provided
+ * (extracted by FTS5 highlight()), those exact words are used for
+ * highlighting — so stemmed matches like "running" are found even when the
+ * user searched "ran".  Falls back to a raw substring search on `searchTerm`.
  *
- * @param {number}  entryId    - Journal entry ID
- * @param {boolean} isArchived - Whether the parent work item is archived
- * @param {number}  itemId     - Parent work item ID
- * @param {number|null} markerId   - Optional marker ID to focus
- * @param {string}  searchTerm - Optional text to find in the editor
- * @param {Object|null} itemObj - Optional full item object (used for archived items to avoid stale allItemsData lookup)
+ * @param {number}  entryId      - Journal entry ID
+ * @param {boolean} isArchived   - Whether the parent work item is archived
+ * @param {number}  itemId       - Parent work item ID
+ * @param {number|null} markerId - Optional marker ID to focus
+ * @param {string}  searchTerm   - Optional text to find in the editor (raw query)
+ * @param {Object|null} itemObj  - Optional full item object (used for archived items to avoid stale allItemsData lookup)
+ * @param {string[]|undefined} matchedTerms - Actual words that matched via FTS5 stemming
  */
-window.focusEntry = function (entryId, isArchived, itemId, markerId = null, searchTerm = '', itemObj = null) {
-    console.log('[focusEntry] called', { entryId, isArchived, itemId, markerId, searchTerm });
+window.focusEntry = function (entryId, isArchived, itemId, markerId = null, searchTerm = '', itemObj = null, matchedTerms = undefined) {
+    console.log('[focusEntry] called', { entryId, isArchived, itemId, markerId, searchTerm, matchedTerms });
     if (isArchived) {
         const archivedContainer = document.getElementById('archived-container');
         const existingItem = archivedContainer.querySelector(`.work-item[data-id="${itemId}"]`);
@@ -2630,33 +2701,48 @@ window.focusEntry = function (entryId, isArchived, itemId, markerId = null, sear
                 range.setEndAfter(markerSpan);
                 editor.selection.setRng(range);
             }
-        } else if (searchTerm) {
-            // Walk text nodes to find and select the first match (case-insensitive)
-            const term = searchTerm.toLowerCase();
+        } else if (searchTerm || (matchedTerms && matchedTerms.length)) {
+            // Build a list of terms to search for in priority order:
+            //   1. matchedTerms from FTS5 highlight() — the actual words that
+            //      matched after porter stemming (e.g. "running" when query was "ran")
+            //   2. Fall back to the raw searchTerm as a substring
+            const termsToTry = [];
+            if (matchedTerms && matchedTerms.length) {
+                matchedTerms.forEach(t => termsToTry.push(t.toLowerCase()));
+            }
+            if (searchTerm) {
+                const raw = searchTerm.toLowerCase();
+                if (!termsToTry.includes(raw)) termsToTry.push(raw);
+            }
+
             const body = editor.getBody();
-            const walker = editor.dom.doc.createTreeWalker(
-                body,
-                NodeFilter.SHOW_TEXT,
-                null,
-                false
-            );
-
             let found = false;
-            let node;
-            while ((node = walker.nextNode())) {
-                const text = node.nodeValue || '';
-                const idx = text.toLowerCase().indexOf(term);
-                if (idx !== -1) {
-                    const range = editor.dom.createRng();
-                    range.setStart(node, idx);
-                    range.setEnd(node, idx + term.length);
-                    editor.selection.setRng(range);
 
-                    const selEl = editor.selection.getNode();
-                    if (selEl) selEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            for (const term of termsToTry) {
+                if (found) break;
+                const walker = editor.dom.doc.createTreeWalker(
+                    body,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                );
 
-                    found = true;
-                    break;
+                let node;
+                while ((node = walker.nextNode())) {
+                    const text = node.nodeValue || '';
+                    const idx = text.toLowerCase().indexOf(term);
+                    if (idx !== -1) {
+                        const range = editor.dom.createRng();
+                        range.setStart(node, idx);
+                        range.setEnd(node, idx + term.length);
+                        editor.selection.setRng(range);
+
+                        const selEl = editor.selection.getNode();
+                        if (selEl) selEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                        found = true;
+                        break;
+                    }
                 }
             }
 

@@ -9,7 +9,8 @@ Routes:
     /api/items                  - CRUD for work items
     /api/items/<id>/entries     - Create entries under a work item
     /api/entries/<id>           - Update/delete individual entries
-    /api/search                 - Full-text search with state/date filters
+    /api/search                 - Full-text search with state/date filters (FTS5 + BM25)
+    /api/admin/reindex          - Backfill FTS5 index for all existing rows
     /api/upload                 - File upload for embedded attachments
     /api/open/<filename>        - Native file open (Windows only)
 """
@@ -19,6 +20,8 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
 import os
 import uuid
+import re
+from html.parser import HTMLParser
 from werkzeug.utils import secure_filename
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import joinedload
@@ -37,6 +40,37 @@ app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
+
+# ============================================================================
+# HTML UTILITY
+# ============================================================================
+
+class _HTMLStripper(HTMLParser):
+    """Minimal HTML-to-plaintext converter used for FTS indexing."""
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        stripped = data.strip()
+        if stripped:
+            self._parts.append(stripped)
+
+    def get_text(self) -> str:
+        return ' '.join(self._parts)
+
+
+def strip_html(html: str) -> str:
+    """Return the visible text content of an HTML string, with all tags removed."""
+    if not html:
+        return ''
+    s = _HTMLStripper()
+    try:
+        s.feed(html)
+    except Exception:
+        # Fallback: crude regex strip for malformed HTML
+        return re.sub(r'<[^>]+>', ' ', html)
+    return s.get_text()
 
 # ============================================================================
 # DATABASE MODELS
@@ -124,21 +158,105 @@ class MemoFolder(db.Model):
         }
 
 
+# ============================================================================
+# FTS5 SEARCH INDEX HELPERS
+# ============================================================================
+
+FTS_CREATE = """
+    CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+        kind UNINDEXED,
+        source_id UNINDEXED,
+        parent_id UNINDEXED,
+        body,
+        tokenize = 'porter unicode61'
+    );
+"""
+
+
+def _fts_body_for_entry(entry: 'JournalEntry') -> str:
+    """Build the text body to index for a journal entry."""
+    title_text = entry.title or ''
+    content_text = strip_html(entry.content)
+    return f"{title_text} {content_text}".strip()
+
+
+def _fts_body_for_item(item: 'WorkItem') -> str:
+    """Build the text body to index for a work item heading."""
+    return (item.heading or '').strip()
+
+
+def fts_upsert_entry(conn, entry: 'JournalEntry') -> None:
+    """Insert or replace a journal entry's row in the FTS index."""
+    conn.execute(
+        text("DELETE FROM search_index WHERE kind = 'entry' AND source_id = :id"),
+        {'id': entry.id}
+    )
+    conn.execute(
+        text("INSERT INTO search_index(kind, source_id, parent_id, body) VALUES ('entry', :id, :pid, :body)"),
+        {'id': entry.id, 'pid': entry.work_item_id, 'body': _fts_body_for_entry(entry)}
+    )
+
+
+def fts_upsert_item(conn, item: 'WorkItem') -> None:
+    """Insert or replace a work item heading's row in the FTS index."""
+    conn.execute(
+        text("DELETE FROM search_index WHERE kind = 'item' AND source_id = :id"),
+        {'id': item.id}
+    )
+    conn.execute(
+        text("INSERT INTO search_index(kind, source_id, parent_id, body) VALUES ('item', :id, NULL, :body)"),
+        {'id': item.id, 'body': _fts_body_for_item(item)}
+    )
+
+
+def fts_delete_entry(conn, entry_id: int) -> None:
+    conn.execute(
+        text("DELETE FROM search_index WHERE kind = 'entry' AND source_id = :id"),
+        {'id': entry_id}
+    )
+
+
+def fts_delete_item(conn, item_id: int) -> None:
+    conn.execute(
+        text("DELETE FROM search_index WHERE kind IN ('item', 'entry') AND (source_id = :id OR parent_id = :id)"),
+        {'id': item_id}
+    )
+
+
+# ============================================================================
+# DATABASE SETUP & MIGRATIONS
+# ============================================================================
+
 # Create tables on startup
 with app.app_context():
     db.create_all()
 
-    # Auto-migration for older databases missing the 'status' column
-    try:
-        inspector = inspect(db.engine)
-        if 'journal_entry' in inspector.get_table_names():
-            columns = [col['name'] for col in inspector.get_columns('journal_entry')]
-            if 'status' not in columns:
-                with db.engine.connect() as conn:
-                    conn.execute(text('ALTER TABLE journal_entry ADD COLUMN status VARCHAR(20)'))
-                    conn.commit()
-    except Exception as e:
-        print(f"Error during schema migration: {e}")
+    with db.engine.connect() as _conn:
+        # Create FTS5 virtual table
+        _conn.execute(text(FTS_CREATE))
+
+        # Auto-migration: status column
+        try:
+            inspector = inspect(db.engine)
+            if 'journal_entry' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('journal_entry')]
+                if 'status' not in columns:
+                    _conn.execute(text('ALTER TABLE journal_entry ADD COLUMN status VARCHAR(20)'))
+        except Exception as e:
+            print(f"Error during schema migration: {e}")
+
+        # Backfill FTS index on startup (idempotent — deletes first)
+        try:
+            _conn.execute(text("DELETE FROM search_index"))
+            items = db.session.query(WorkItem).all()
+            for _item in items:
+                fts_upsert_item(_conn, _item)
+                for _entry in _item.entries:
+                    fts_upsert_entry(_conn, _entry)
+        except Exception as e:
+            print(f"Error during FTS backfill: {e}")
+
+        _conn.commit()
 
 # ============================================================================
 # CSRF PROTECTION
@@ -211,6 +329,9 @@ def create_item():
     new_item = WorkItem(heading=heading, state=data.get('state', 'TODO'))
     db.session.add(new_item)
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_upsert_item(conn, new_item)
+        conn.commit()
     return jsonify(new_item.to_dict()), 201
 
 
@@ -230,6 +351,9 @@ def update_item(item_id):
             item.memo_folder_id = folder_id
 
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_upsert_item(conn, item)
+        conn.commit()
     return jsonify(item.to_dict())
 
 
@@ -237,8 +361,12 @@ def update_item(item_id):
 def delete_item(item_id):
     """Delete a work item and all its entries (cascade)."""
     item = db.get_or_404(WorkItem, item_id)
+    item_id_to_delete = item.id
     db.session.delete(item)
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_delete_item(conn, item_id_to_delete)
+        conn.commit()
     return '', 204
 
 
@@ -323,6 +451,9 @@ def create_entry(item_id):
     )
     db.session.add(new_entry)
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_upsert_entry(conn, new_entry)
+        conn.commit()
     return jsonify(new_entry.to_dict()), 201
 
 
@@ -340,6 +471,9 @@ def update_entry(entry_id):
         entry.status = data['status']
 
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_upsert_entry(conn, entry)
+        conn.commit()
     return jsonify(entry.to_dict())
 
 
@@ -347,8 +481,12 @@ def update_entry(entry_id):
 def delete_entry(entry_id):
     """Delete a single journal entry."""
     entry = db.get_or_404(JournalEntry, entry_id)
+    entry_id_to_delete = entry.id
     db.session.delete(entry)
     db.session.commit()
+    with db.engine.connect() as conn:
+        fts_delete_entry(conn, entry_id_to_delete)
+        conn.commit()
     return '', 204
 
 # ============================================================================
@@ -416,81 +554,207 @@ def get_reminders():
 def search_items():
     """
     Search work items and entries with optional filters:
-      - q: text search (matches heading, entry title, or entry content)
+      - q: text search using SQLite FTS5 with Porter stemmer and BM25 ranking.
+           Multi-word queries match entries that contain all words (in any form).
+           Stemming means "running" matches "run", "fixed" matches "fix", etc.
       - state: comma-separated state filter (e.g. "TODO,WIP")
       - from/to: date range filter on work item creation date
-    
+
     When a text query is provided, entries are filtered to only include matches
     (unless the parent heading itself matches, in which case all entries are kept).
+    Results are ordered by BM25 relevance score when a query is present.
     """
-    q = request.args.get('q', '')
+    q = request.args.get('q', '').strip()
     states = request.args.get('state', '')
     from_date = request.args.get('from', '')
     to_date = request.args.get('to', '')
 
-    query = db.session.query(WorkItem).options(
+    # --- No text query: SQL-only path (fast, unchanged behaviour) ---
+    if not q:
+        query = db.session.query(WorkItem).options(
+            joinedload(WorkItem.entries).joinedload(JournalEntry.markers)
+        )
+        if states:
+            query = query.filter(WorkItem.state.in_(states.split(',')))
+        if from_date:
+            try:
+                query = query.filter(WorkItem.created_at >= datetime.fromisoformat(from_date))
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_dt = datetime.fromisoformat(to_date)
+                if len(to_date) == 10:
+                    to_dt = to_dt.replace(hour=23, minute=59, second=59)
+                query = query.filter(WorkItem.created_at <= to_dt)
+            except ValueError:
+                pass
+        items = query.order_by(WorkItem.created_at.desc()).all()
+        return jsonify([item.to_dict() for item in items])
+
+    # --- Text query: FTS5 path ---
+    # Build a safe FTS5 MATCH expression.
+    # Wrap each token in double-quotes to treat it as a literal phrase token
+    # (prevents FTS5 syntax errors from special chars like * : ( ) etc.).
+    def _fts_escape(token: str) -> str:
+        return '"' + token.replace('"', '""') + '"'
+
+    tokens = q.split()
+    fts_query = ' '.join(_fts_escape(t) for t in tokens)
+
+    # Query FTS index; rank is negative BM25 (lower = better match)
+    try:
+        fts_rows = db.session.execute(
+            text(
+                "SELECT kind, source_id, parent_id "
+                "FROM search_index "
+                "WHERE body MATCH :q "
+                "ORDER BY rank"
+            ),
+            {'q': fts_query}
+        ).fetchall()
+    except Exception:
+        # FTS syntax error fallback: return empty
+        return jsonify([])
+
+    if not fts_rows:
+        return jsonify([])
+
+    # Collect matched item IDs and entry IDs (preserving BM25 rank order)
+    matched_item_ids: list[int] = []   # items that directly matched
+    matched_entry_ids: set[int] = set()
+    # Map entry_id -> parent work_item_id for items that matched via entry
+    entry_to_item: dict[int, int] = {}
+
+    seen_items: set[int] = set()
+    for row in fts_rows:
+        kind, source_id, parent_id = row.kind, row.source_id, row.parent_id
+        if kind == 'item':
+            if source_id not in seen_items:
+                matched_item_ids.append(source_id)
+                seen_items.add(source_id)
+        elif kind == 'entry':
+            matched_entry_ids.add(source_id)
+            entry_to_item[source_id] = parent_id
+            if parent_id not in seen_items:
+                matched_item_ids.append(parent_id)
+                seen_items.add(parent_id)
+
+    if not matched_item_ids:
+        return jsonify([])
+
+    # Use FTS5 highlight() to discover which words actually matched per entry.
+    # This lets the frontend highlight the real word ("running") even when the
+    # query was a different form ("ran") that matched via porter stemming.
+    entry_matched_terms: dict[int, list[str]] = {}
+    try:
+        hl_rows = db.session.execute(
+            text(
+                "SELECT source_id, "
+                "       highlight(search_index, 3, '<<M>>', '<</M>>') AS hl "
+                "FROM search_index "
+                "WHERE kind = 'entry' AND body MATCH :q"
+            ),
+            {'q': fts_query}
+        ).fetchall()
+        for hl_row in hl_rows:
+            # Extract the words wrapped by <<M>>…<</M>> markers
+            terms = re.findall(r'<<M>>(.+?)<</M>>', hl_row.hl)
+            if terms:
+                # De-duplicate while preserving order; keep original casing
+                seen_terms: set[str] = set()
+                unique: list[str] = []
+                for t in terms:
+                    key = t.lower()
+                    if key not in seen_terms:
+                        seen_terms.add(key)
+                        unique.append(t)
+                entry_matched_terms[hl_row.source_id] = unique
+    except Exception:
+        pass  # Non-critical; highlighting still falls back to raw query
+
+    # Fetch matching work items (apply state/date filters here)
+    item_query = db.session.query(WorkItem).options(
         joinedload(WorkItem.entries).joinedload(JournalEntry.markers)
-    )
+    ).filter(WorkItem.id.in_(matched_item_ids))
 
-    # Filter by state
     if states:
-        query = query.filter(WorkItem.state.in_(states.split(',')))
-
-    # Filter by date range
+        item_query = item_query.filter(WorkItem.state.in_(states.split(',')))
     if from_date:
         try:
-            query = query.filter(WorkItem.created_at >= datetime.fromisoformat(from_date))
+            item_query = item_query.filter(WorkItem.created_at >= datetime.fromisoformat(from_date))
         except ValueError:
             pass
-
     if to_date:
         try:
             to_dt = datetime.fromisoformat(to_date)
-            if len(to_date) == 10:  # Date-only: extend to end of day
+            if len(to_date) == 10:
                 to_dt = to_dt.replace(hour=23, minute=59, second=59)
-            query = query.filter(WorkItem.created_at <= to_dt)
+            item_query = item_query.filter(WorkItem.created_at <= to_dt)
         except ValueError:
             pass
 
-    # Text search: match heading OR any entry title/content
-    if q:
-        # Escape LIKE wildcard characters to prevent unintended pattern matching
-        q_escaped = q.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-        heading_filter = WorkItem.heading.ilike(f'%{q_escaped}%', escape='\\')
-        entry_filter = WorkItem.entries.any(
-            db.or_(
-                JournalEntry.title.ilike(f'%{q_escaped}%', escape='\\'),
-                JournalEntry.content.ilike(f'%{q_escaped}%', escape='\\')
-            )
-        )
-        query = query.filter(db.or_(heading_filter, entry_filter))
+    items_by_id = {item.id: item for item in item_query.all()}
 
-    items = query.order_by(WorkItem.created_at.desc()).all()
-
-    # Without text query, return all entries for matched items
-    if not q:
-        return jsonify([item.to_dict() for item in items])
-
-    # With text query, filter individual entries for precise timeline results
-    q_lower = q.lower()
+    # Build results in BM25 rank order, filtering entries to only matched ones
     filtered_results = []
+    seen_result_ids: set[int] = set()
 
-    for item in items:
+    for item_id in matched_item_ids:
+        if item_id not in items_by_id or item_id in seen_result_ids:
+            continue
+        seen_result_ids.add(item_id)
+        item = items_by_id[item_id]
         item_dict = item.to_dict()
-        heading_matches = q_lower in item.heading.lower()
 
-        if not heading_matches:
-            # Keep only entries whose title or content matches
+        heading_matched = item_id in {
+            row.source_id for row in fts_rows if row.kind == 'item'
+        }
+
+        if not heading_matched:
+            # Keep only entries that matched in the FTS index
             item_dict['entries'] = [
                 e for e in item_dict['entries']
-                if q_lower in (e.get('title') or '').lower()
-                or q_lower in (e.get('content') or '').lower()
+                if e['id'] in matched_entry_ids
             ]
 
-        if heading_matches or item_dict['entries']:
+        # Annotate each entry with the actual words that matched
+        for entry_dict in item_dict['entries']:
+            terms = entry_matched_terms.get(entry_dict['id'])
+            if terms:
+                entry_dict['matched_terms'] = terms
+
+        if heading_matched or item_dict['entries']:
+            item_dict['relevance_score'] = len([
+                r for r in fts_rows
+                if (r.kind == 'item' and r.source_id == item_id)
+                or (r.kind == 'entry' and r.parent_id == item_id)
+            ])
             filtered_results.append(item_dict)
 
     return jsonify(filtered_results)
+
+
+@app.route('/api/admin/reindex', methods=['POST'])
+def admin_reindex():
+    """
+    Rebuild the FTS5 search index from scratch for all existing work items and entries.
+    Safe to call repeatedly — always clears before re-inserting.
+    """
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("DELETE FROM search_index"))
+            items = db.session.query(WorkItem).options(
+                joinedload(WorkItem.entries)
+            ).all()
+            for item in items:
+                fts_upsert_item(conn, item)
+                for entry in item.entries:
+                    fts_upsert_entry(conn, entry)
+            conn.commit()
+        return jsonify({'status': 'ok', 'indexed_items': len(items)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================================
 # ROUTES: File Upload & Native Open
