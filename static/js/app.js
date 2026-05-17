@@ -1242,17 +1242,11 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
         </div>
         <div class="entry-content">
             <div class="entry-content-inner">
-                <div id="tinymce-${entry.id}" class="tinymce-editor" data-toolbar-id="toolbar-${entry.id}">${entry.content || '<p><br></p>'}</div>
+                <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
+                <div id="tinymce-${entry.id}" class="tinymce-editor">${entry.content || '<p><br></p>'}</div>
             </div>
         </div>
     `;
-
-    // Create floating toolbar container (positioned outside entry structure)
-    const toolbarContainer = document.createElement('div');
-    toolbarContainer.id = `toolbar-${entry.id}`;
-    toolbarContainer.className = 'entry-toolbar-container floating-toolbar';
-    toolbarContainer.style.display = 'none';
-    document.body.appendChild(toolbarContainer);
 
     // Toggle expand/collapse on header click
     entryDiv.querySelector('.entry-header').addEventListener('click', (e) => {
@@ -1675,10 +1669,10 @@ function initTinyMCE(entry, autoFocus = false) {
                 clearTimeout(saveTimeout);
                 triggerSave();
 
-                // Hide toolbar on blur
+                // Hide toolbar on blur (via CSS class)
                 const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
                 if (toolbarEl) {
-                    toolbarEl.style.display = 'none';
+                    toolbarEl.classList.remove('toolbar-visible');
                 }
                 const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entry.id}"]`);
                 if (entryDiv) {
@@ -1689,10 +1683,10 @@ function initTinyMCE(entry, autoFocus = false) {
             });
 
             editor.on('focus', () => {
-                // Show toolbar on focus
+                // Show toolbar on focus (via CSS class)
                 const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
                 if (toolbarEl) {
-                    toolbarEl.style.display = 'flex';
+                    toolbarEl.classList.add('toolbar-visible');
                 }
                 const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entry.id}"]`);
                 if (entryDiv) {
@@ -2492,6 +2486,10 @@ window.deleteEntry = async function (entryId) {
             // Clean up TinyMCE instance
             const editor = tinymce.get(`tinymce-${entryId}`);
             if (editor) editor.remove();
+
+            // Safety: remove any orphaned toolbar that might be on document.body
+            const orphanedToolbar = document.body.querySelector(`#toolbar-${entryId}.floating-toolbar`);
+            if (orphanedToolbar) orphanedToolbar.remove();
         }
     } catch (error) {
         console.error('Error deleting entry:', error);

@@ -541,6 +541,10 @@ body {
     overflow: hidden;
 }
 
+.journal-entry.expanded {
+    overflow: visible;
+}
+
 .journal-entry:focus-within {
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
@@ -722,21 +726,37 @@ body {
     border-color: var(--text-muted);
 }
 
-/* Floating Toolbar */
-.floating-toolbar {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1000;
-    display: none;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    background: var(--app-background);
-    /* Need solid background instead of blur */
-    border: 1px solid var(--border-main);
-    border-radius: 8px;
-    padding: 0.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+/* Sticky Inline Toolbar (inside entry card) */
+.entry-toolbar-container {
+    display: none;               /* hidden by default */
+    position: sticky;
+    top: 0;
+    z-index: 2000;               /* Sit above all editor content, handles, selection borders, and resizers */
+    background: var(--toolbar-background);
+    border-bottom: 1px solid var(--border-main);
+    padding: 2px 4px;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;   /* Right align the toolbar items within the card */
+    overflow: visible;
+    flex-shrink: 0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+.entry-toolbar-container.toolbar-visible {
+    display: flex;
+    animation: toolbarSlideIn 0.15s ease-out;
+}
+
+@keyframes toolbarSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ----- Inline TinyMCE Editor Styling ----- */
@@ -1234,12 +1254,6 @@ details.timeline-date>summary {
 }
 
 /* Compressed Inline Editor Toolbar Styles */
-.entry-toolbar-container {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    overflow: visible;
-}
 
 .entry-toolbar-container .tox-tinymce-inline {
     position: static !important;

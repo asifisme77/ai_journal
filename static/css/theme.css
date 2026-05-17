@@ -40,6 +40,7 @@
     --task-header-background: rgba(239, 237, 230, 0.9);
     --journal-header-background: rgba(220, 207, 207, 0.9);
     --editor-background: rgba(220, 228, 241, 0.621);
+    --toolbar-background: #ffffff;
 }
 
 /* ============================
@@ -71,4 +72,5 @@
     --task-header-background: rgba(30, 41, 59, 0.8);
     --journal-header-background: rgba(51, 65, 85, 0.4);
     --editor-background: rgba(15, 23, 42, 0.6);
+    --toolbar-background: #1e293b;
 }
