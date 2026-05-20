@@ -128,6 +128,7 @@ class Marker(db.Model):
     state = db.Column(db.String(20), default='OPEN') # 'OPEN' or 'CLOSED'
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reminder_due_date = db.Column(db.DateTime, nullable=True)
+    is_status_marker = db.Column(db.Boolean, default=False, nullable=True)
 
     def to_dict(self):
         return {
@@ -136,7 +137,8 @@ class Marker(db.Model):
             'text': self.text,
             'state': self.state,
             'created_at': self.created_at.isoformat(),
-            'reminder_due_date': self.reminder_due_date.isoformat() if self.reminder_due_date else None
+            'reminder_due_date': self.reminder_due_date.isoformat() if self.reminder_due_date else None,
+            'is_status_marker': self.is_status_marker
         }
 
 class MemoFolder(db.Model):
@@ -244,6 +246,16 @@ with app.app_context():
                     _conn.execute(text('ALTER TABLE journal_entry ADD COLUMN status VARCHAR(20)'))
         except Exception as e:
             print(f"Error during schema migration: {e}")
+
+        # Auto-migration: is_status_marker column
+        try:
+            inspector = inspect(db.engine)
+            if 'marker' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('marker')]
+                if 'is_status_marker' not in columns:
+                    _conn.execute(text('ALTER TABLE marker ADD COLUMN is_status_marker BOOLEAN DEFAULT 0'))
+        except Exception as e:
+            print(f"Error during Marker schema migration: {e}")
 
         # Backfill FTS index on startup (idempotent — deletes first)
         try:
@@ -441,7 +453,7 @@ def create_entry(item_id):
     item = db.get_or_404(WorkItem, item_id)
     data = request.json
 
-    title = data.get('title') or datetime.now().strftime("%B %d, %Y")
+    title = data.get('title') or f"{item.heading} details..."
 
     new_entry = JournalEntry(
         work_item_id=item.id,
@@ -451,6 +463,17 @@ def create_entry(item_id):
     )
     db.session.add(new_entry)
     db.session.commit()
+
+    if new_entry.status == 'FOLLOWUP':
+        status_marker = Marker(
+            entry_id=new_entry.id,
+            text=f"Follow-up: {new_entry.title}",
+            state='OPEN',
+            is_status_marker=True
+        )
+        db.session.add(status_marker)
+        db.session.commit()
+
     with db.engine.connect() as conn:
         fts_upsert_entry(conn, new_entry)
         conn.commit()
@@ -465,10 +488,31 @@ def update_entry(entry_id):
 
     if 'title' in data:
         entry.title = data['title']
+        # Keep status marker text in sync with new title
+        status_marker = db.session.query(Marker).filter_by(entry_id=entry.id, is_status_marker=True).first()
+        if status_marker:
+            status_marker.text = f"Follow-up: {entry.title}"
+
     if 'content' in data:
         entry.content = data['content']
+
     if 'status' in data:
-        entry.status = data['status']
+        old_status = entry.status
+        new_status = data['status']
+        entry.status = new_status
+
+        if new_status == 'FOLLOWUP' and old_status != 'FOLLOWUP':
+            status_marker = db.session.query(Marker).filter_by(entry_id=entry.id, is_status_marker=True).first()
+            if not status_marker:
+                status_marker = Marker(
+                    entry_id=entry.id,
+                    text=f"Follow-up: {entry.title}",
+                    state='OPEN',
+                    is_status_marker=True
+                )
+                db.session.add(status_marker)
+        elif new_status != 'FOLLOWUP' and old_status == 'FOLLOWUP':
+            db.session.query(Marker).filter_by(entry_id=entry.id, is_status_marker=True).delete()
 
     db.session.commit()
     with db.engine.connect() as conn:
@@ -541,9 +585,10 @@ def get_reminders():
     
     return jsonify([{
         **marker.to_dict(),
-        'entry_title': marker.entry.title,
-        'work_item_heading': marker.entry.work_item.heading,
-        'work_item_id': marker.entry.work_item_id
+        'entry_title': marker.entry.title if marker.entry else '',
+        'work_item_heading': marker.entry.work_item.heading if (marker.entry and marker.entry.work_item) else '',
+        'work_item_id': marker.entry.work_item_id if marker.entry else None,
+        'is_archived': (marker.entry.work_item.state == 'DONE') if (marker.entry and marker.entry.work_item) else False
     } for marker in markers])
 
 # ============================================================================

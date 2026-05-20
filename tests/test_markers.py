@@ -167,3 +167,86 @@ class TestMarkerCascade:
 
         reminders = client.get('/api/markers/reminders').get_json()
         assert len(reminders) == 0
+
+
+class TestFollowUpStatusMarkers:
+    """Verify follow-up status markers are created, updated, and deleted appropriately."""
+
+    def test_creating_entry_with_followup_creates_status_marker(self, client):
+        item = client.post('/api/items', json={'heading': 'Followup Task'}).get_json()
+        entry = client.post(f'/api/items/{item["id"]}/entries',
+                            json={'title': 'Day 1 Notes', 'status': 'FOLLOWUP'}).get_json()
+
+        # Retrieve reminders/markers
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert len(reminders) == 1
+        assert reminders[0]['text'] == 'Follow-up: Day 1 Notes'
+        assert reminders[0]['is_status_marker'] is True
+        assert reminders[0]['is_archived'] is False
+
+    def test_updating_status_to_followup_creates_status_marker(self, client):
+        item = client.post('/api/items', json={'heading': 'My Task'}).get_json()
+        entry = client.post(f'/api/items/{item["id"]}/entries',
+                            json={'title': 'Notes'}).get_json()
+
+        # Initially no markers
+        assert len(client.get('/api/markers/reminders').get_json()) == 0
+
+        # Change status to FOLLOWUP
+        res = client.put(f'/api/entries/{entry["id"]}', json={'status': 'FOLLOWUP'})
+        assert res.status_code == 200
+
+        # Verify status marker is created
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert len(reminders) == 1
+        assert reminders[0]['text'] == 'Follow-up: Notes'
+        assert reminders[0]['is_status_marker'] is True
+
+    def test_updating_status_from_followup_deletes_status_marker(self, client):
+        item = client.post('/api/items', json={'heading': 'My Task'}).get_json()
+        entry = client.post(f'/api/items/{item["id"]}/entries',
+                            json={'title': 'Notes', 'status': 'FOLLOWUP'}).get_json()
+
+        # Status marker exists
+        assert len(client.get('/api/markers/reminders').get_json()) == 1
+
+        # Change status to DONE (not FOLLOWUP)
+        res = client.put(f'/api/entries/{entry["id"]}', json={'status': 'DONE'})
+        assert res.status_code == 200
+
+        # Status marker should be removed
+        assert len(client.get('/api/markers/reminders').get_json()) == 0
+
+    def test_updating_entry_title_updates_status_marker_text(self, client):
+        item = client.post('/api/items', json={'heading': 'My Task'}).get_json()
+        entry = client.post(f'/api/items/{item["id"]}/entries',
+                            json={'title': 'Old Title', 'status': 'FOLLOWUP'}).get_json()
+
+        # Verify old title in marker
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert reminders[0]['text'] == 'Follow-up: Old Title'
+
+        # Update entry title
+        res = client.put(f'/api/entries/{entry["id"]}', json={'title': 'New Title'})
+        assert res.status_code == 200
+
+        # Verify status marker text is updated
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert len(reminders) == 1
+        assert reminders[0]['text'] == 'Follow-up: New Title'
+
+    def test_is_archived_context_in_reminders(self, client):
+        item = client.post('/api/items', json={'heading': 'My Task'}).get_json()
+        entry = client.post(f'/api/items/{item["id"]}/entries',
+                            json={'title': 'Notes', 'status': 'FOLLOWUP'}).get_json()
+
+        # Active tasks are not archived
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert reminders[0]['is_archived'] is False
+
+        # Archive the work item (state = DONE)
+        client.put(f'/api/items/{item["id"]}', json={'state': 'DONE'})
+
+        # Now is_archived should be True
+        reminders = client.get('/api/markers/reminders').get_json()
+        assert reminders[0]['is_archived'] is True

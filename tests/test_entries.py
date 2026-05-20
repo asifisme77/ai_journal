@@ -22,13 +22,12 @@ class TestCreateEntry:
         assert data['status'] is None
 
     def test_creates_entry_with_default_title(self, client):
-        """When no title is provided, it should default to today's date."""
+        """When no title is provided, it should default to the work item heading + ' details...'."""
         item = client.post('/api/items', json={'heading': 'Task'}).get_json()
 
         res = client.post(f'/api/items/{item["id"]}/entries', json={})
         assert res.status_code == 201
-        # Title should be a date string like "April 15, 2026"
-        assert len(res.get_json()['title']) > 5
+        assert res.get_json()['title'] == 'Task details...'
 
     def test_creates_entry_with_status(self, client):
         item = client.post('/api/items', json={'heading': 'Task'}).get_json()

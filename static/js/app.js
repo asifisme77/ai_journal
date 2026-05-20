@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="reminder-item-time">${timeStr}</span>
                     </div>
                 `;
-                div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id, marker.id);
+                div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id, marker.is_status_marker ? null : marker.id);
                 container.appendChild(div);
             });
         } catch (error) {
@@ -2354,16 +2354,16 @@ document.addEventListener('DOMContentLoaded', () => {
  * Removes existing "+" buttons, appends the new entry, and auto-expands the item.
  */
 window.addEntry = async function (itemId) {
-    const now = new Date();
-    const dateTitle = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-        + ' at '
-        + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const workItem = document.querySelector(`.work-item[data-id="${itemId}"]`);
+    const headingInput = workItem ? workItem.querySelector('.item-title-input') : null;
+    const taskTitle = headingInput ? headingInput.value.trim() : '';
+    const defaultTitle = taskTitle ? (taskTitle + ' details...') : 'New Entry details...';
 
     try {
         const res = await fetch(`/api/items/${itemId}/entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: dateTitle, content: '' })
+            body: JSON.stringify({ title: defaultTitle, content: '' })
         });
 
         if (res.ok) {
@@ -2420,11 +2420,14 @@ window.updateEntryTitle = async function (entryId, newTitle) {
 /** Updates a journal entry's status via the API. */
 window.updateEntryStatus = async function (entryId, newStatus) {
     try {
-        await fetch(`/api/entries/${entryId}`, {
+        const res = await fetch(`/api/entries/${entryId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus === "" ? null : newStatus })
         });
+        if (res.ok && window.refreshSidebar) {
+            await window.refreshSidebar();
+        }
     } catch (error) {
         console.error('Error updating entry status:', error);
     }
