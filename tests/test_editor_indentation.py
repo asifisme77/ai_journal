@@ -14,7 +14,7 @@ def test_single_line_indent(flask_server, page: Page):
     editor_locator.wait_for(state='visible')
     
     # Click inside to focus
-    editor_locator.click()
+    editor_locator.click(force=True)
     
     # Set standard block content
     page.evaluate('''() => {
@@ -49,13 +49,15 @@ def test_single_line_indent(flask_server, page: Page):
 
 def test_multiline_br_split_indent(flask_server, page: Page):
     """Verifies that pressing Tab on an un-split <br> text block successfully splits and indents without destroying the editor."""
+    logs = []
+    page.on('console', lambda msg: logs.append(msg.text))
     page.goto(flask_server)
     
     # Wait for the editor to load
     editor_locator = page.locator('div#tinymce-1')
     editor_locator.wait_for(state='visible')
     
-    editor_locator.click()
+    editor_locator.click(force=True)
     
     # Insert <br> paragraph
     page.evaluate('''() => {
@@ -98,3 +100,148 @@ def test_multiline_br_split_indent(flask_server, page: Page):
     }''')
     
     assert is_indented is True, "The middle line should have been indented"
+
+def test_preformatted_margin_indentation(flask_server, page: Page):
+    """Verifies that converting an indented paragraph to a PRE block uses margin-left instead of padding-left,
+    and that indenting/outdenting a PRE block correctly increases/decreases margin-left and clears padding-left.
+    """
+    page.goto(flask_server)
+    
+    # Wait for the editor to load
+    editor_locator = page.locator('div#tinymce-1')
+    editor_locator.wait_for(state='visible')
+    
+    # Focus
+    editor_locator.click(force=True)
+    
+    # Set up an indented paragraph
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.setContent('<p style="padding-left: 20px;">Indented line</p>');
+    }''')
+    
+    time.sleep(0.5)
+    
+    # Select inside the paragraph
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const p = editor.dom.select('p')[0];
+        editor.selection.setCursorLocation(p.firstChild, 0);
+    }''')
+    
+    # Convert to preformatted block via FormatBlock
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.execCommand('FormatBlock', false, 'pre');
+    }''')
+    
+    time.sleep(0.5)
+    
+    # Verify the created pre block uses margin-left instead of padding-left
+    styles = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const pre = editor.dom.select('pre')[0];
+        return {
+            nodeName: pre.nodeName,
+            marginLeft: pre.style.marginLeft,
+            paddingLeft: pre.style.paddingLeft
+        };
+    }''')
+    
+    assert styles['nodeName'] == 'PRE'
+    assert styles['marginLeft'] == '20px'
+    assert styles['paddingLeft'] == '' or styles['paddingLeft'] is None, "Padding-left must be cleared"
+    
+    # Now let's indent it via editor.execCommand('Indent')
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.execCommand('Indent');
+    }''')
+    
+    time.sleep(0.5)
+    
+    styles_after_indent = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const pre = editor.dom.select('pre')[0];
+        return {
+            marginLeft: pre.style.marginLeft,
+            paddingLeft: pre.style.paddingLeft
+        };
+    }''')
+    
+    assert styles_after_indent['marginLeft'] == '40px'
+    assert styles_after_indent['paddingLeft'] == '' or styles_after_indent['paddingLeft'] is None, "Padding-left must be cleared after Indent"
+
+    # Now let's outdent it via editor.execCommand('Outdent')
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.execCommand('Outdent');
+    }''')
+    
+    time.sleep(0.5)
+    
+    styles_after_outdent = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const pre = editor.dom.select('pre')[0];
+        return {
+            marginLeft: pre.style.marginLeft,
+            paddingLeft: pre.style.paddingLeft
+        };
+    }''')
+    
+    assert styles_after_outdent['marginLeft'] == '20px'
+    assert styles_after_outdent['paddingLeft'] == '' or styles_after_outdent['paddingLeft'] is None, "Padding-left must be cleared after Outdent"
+
+def test_preformatted_unformat_preserves_indentation(flask_server, page: Page):
+    """Verifies that converting an indented PRE block back to a normal block (e.g. paragraph)
+    correctly preserves the indentation level and alignment, mapping margin-left back to padding-left.
+    """
+    page.goto(flask_server)
+    
+    # Wait for the editor to load
+    editor_locator = page.locator('div#tinymce-1')
+    editor_locator.wait_for(state='visible')
+    
+    # Focus
+    editor_locator.click(force=True)
+    
+    # Set up an indented PRE block
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.setContent('<pre style="margin-left: 40px; text-align: right;">Indented preformatted text</pre>');
+    }''')
+    
+    time.sleep(0.5)
+    
+    # Select inside the PRE block
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const pre = editor.dom.select('pre')[0];
+        editor.selection.setCursorLocation(pre.firstChild, 0);
+    }''')
+    
+    # Convert to normal block (p) via FormatBlock
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.execCommand('FormatBlock', false, 'p');
+    }''')
+    
+    time.sleep(0.5)
+    
+    # Verify the created P block uses padding-left instead of margin-left and maintains text-align
+    styles = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        const p = editor.dom.select('p')[0];
+        return {
+            nodeName: p.nodeName,
+            marginLeft: p.style.marginLeft,
+            paddingLeft: p.style.paddingLeft,
+            textAlign: p.style.textAlign
+        };
+    }''')
+    
+    assert styles['nodeName'] == 'P'
+    assert styles['paddingLeft'] == '40px', "Paragraph should retain the 40px indentation as padding-left"
+    assert styles['marginLeft'] == '' or styles['marginLeft'] is None, "Margin-left must be cleared on paragraph conversion"
+    assert styles['textAlign'] == 'right', "Text-alignment should be retained"
+

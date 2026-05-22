@@ -1464,7 +1464,7 @@ function initTinyMCE(entry, autoFocus = false) {
         promotion: false,
         extended_valid_elements: 'details[class|open|style],summary,span[class|data-marker-id|contenteditable|title|style]',
         plugins: 'lists link table autolink nonbreaking forecolor backcolor',
-        toolbar: 'blocks fontfamily forecolor backcolor | setparagraph setpreformatted bold italic underline strikethrough | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
+        toolbar: 'blocks fontfamily forecolor backcolor | setparagraph setpreformatted bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
         contextmenu: 'addmarker | cut copy paste | link table',
         table_default_attributes: {
             border: '0'
@@ -1879,6 +1879,19 @@ function initTinyMCE(entry, autoFocus = false) {
                     parent.removeChild(codeEl);
                 });
 
+                // Migration: convert padding-left on PRE elements to margin-left (excluding log-blocks)
+                const preElements = editor.dom.select('pre');
+                preElements.forEach(function (preEl) {
+                    if (!editor.dom.getParent(preEl, 'details.log-block')) {
+                        const pl = parseInt(editor.dom.getStyle(preEl, 'padding-left') || 0, 10);
+                        if (pl > 0) {
+                            const ml = parseInt(editor.dom.getStyle(preEl, 'margin-left') || 0, 10);
+                            editor.dom.setStyle(preEl, 'margin-left', (ml + pl) + 'px');
+                            editor.dom.setStyle(preEl, 'padding-left', '');
+                        }
+                    }
+                });
+
                 triggerOutlinerUpdate();
                 lastSavedContent = editor.getContent();
                 initResizableTableColumns(editor);
@@ -2177,13 +2190,13 @@ function initTinyMCE(entry, autoFocus = false) {
             });
 
             // ================================================================
-            // TABLE INDENTATION: Preserve indent level on table insert
+            // TABLE INDENTATION & ALIGNMENT: Preserve indent and alignment level on block insertions
             // ================================================================
 
             let tableInsertIndent = 0;
-            let preFormatIndent = 0;
+            let blockStyleCache = [];
 
-            // Capture current indent before table insertion
+            // Capture current indent and alignment before table insertion or format block
             editor.on('BeforeExecCommand', function (e) {
                 if (e.command === 'mceInsertTable') {
                     const node = editor.selection.getNode();
@@ -2195,16 +2208,31 @@ function initTinyMCE(entry, autoFocus = false) {
                         tableInsertIndent += parseInt(editor.dom.getStyle(block, 'margin-left') || 0, 10);
                     }
                     tableInsertIndent += editor.dom.getParents(node, 'OL,UL').length * 20;
-                } else if (e.command === 'FormatBlock' && typeof e.value === 'string' && e.value.toLowerCase() === 'pre') {
-                    const node = editor.selection.getNode();
-                    const block = editor.dom.getParent(node, editor.dom.isBlock);
-                    preFormatIndent = 0;
-
-                    if (block) {
-                        preFormatIndent += parseInt(editor.dom.getStyle(block, 'padding-left') || 0, 10);
-                        preFormatIndent += parseInt(editor.dom.getStyle(block, 'margin-left') || 0, 10);
-                    }
-                    preFormatIndent += editor.dom.getParents(node, 'OL,UL').length * 20;
+                } else if (e.command === 'FormatBlock' && typeof e.value === 'string') {
+                    blockStyleCache = [];
+                    const selectedBlocks = editor.selection.getSelectedBlocks();
+                    selectedBlocks.forEach(block => {
+                        let indent = 0;
+                        if (block) {
+                            indent += parseInt(editor.dom.getStyle(block, 'padding-left') || 0, 10);
+                            indent += parseInt(editor.dom.getStyle(block, 'margin-left') || 0, 10);
+                            indent += editor.dom.getParents(block, 'OL,UL').length * 20;
+                        }
+                        const align = block ? (editor.dom.getStyle(block, 'text-align') || '') : '';
+                        blockStyleCache.push({ indent, align });
+                    });
+                } else if (e.command === 'Indent' || e.command === 'Outdent') {
+                    // Temporarily map margin-left of PRE tags to padding-left for TinyMCE native engine to indent/outdent them
+                    const preBlocks = Array.from(editor.getBody().querySelectorAll('pre'));
+                    preBlocks.forEach(preEl => {
+                        if (!editor.dom.getParent(preEl, 'details.log-block')) {
+                            const ml = parseInt(editor.dom.getStyle(preEl, 'margin-left') || 0, 10);
+                            if (ml > 0) {
+                                editor.dom.setStyle(preEl, 'padding-left', ml + 'px');
+                                editor.dom.setStyle(preEl, 'margin-left', '');
+                            }
+                        }
+                    });
                 }
             });
 
@@ -2232,53 +2260,89 @@ function initTinyMCE(entry, autoFocus = false) {
                     }
                 }
 
-                // If user applies 'Preformatted' block styling to multiple paragraphs, TinyMCE
-                // splits them into multiple <pre> blocks. Merge them back tightly.
-                if (e.command === 'FormatBlock' && typeof e.value === 'string' && e.value.toLowerCase() === 'pre') {
+                // If FormatBlock was executed, restore the cached indentation levels and alignments
+                if (e.command === 'FormatBlock' && typeof e.value === 'string') {
                     editor.undoManager.transact(() => {
                         const bookmark = editor.selection.getBookmark(2, true);
 
-                        // 1. Re-apply captured indentation specifically to the newly formatted selection
+                        // 1. Re-apply captured indentation and alignment specifically to the newly formatted selection
                         const selectedBlocks = editor.selection.getSelectedBlocks();
-                        selectedBlocks.forEach(block => {
-                            if (block && block.nodeName === 'PRE' && preFormatIndent > 0) {
-                                editor.dom.setStyle(block, 'padding-left', preFormatIndent + 'px');
+                        selectedBlocks.forEach((block, index) => {
+                            if (block && blockStyleCache[index]) {
+                                const cached = blockStyleCache[index];
+                                if (cached.indent > 0) {
+                                    if (block.nodeName === 'PRE') {
+                                        editor.dom.setStyle(block, 'margin-left', cached.indent + 'px');
+                                        editor.dom.setStyle(block, 'padding-left', ''); // clear padding-left
+                                    } else {
+                                        editor.dom.setStyle(block, 'padding-left', cached.indent + 'px');
+                                        editor.dom.setStyle(block, 'margin-left', ''); // clear margin-left
+                                    }
+                                } else {
+                                    editor.dom.setStyle(block, 'padding-left', '');
+                                    editor.dom.setStyle(block, 'margin-left', '');
+                                }
+                                if (cached.align) {
+                                    editor.dom.setStyle(block, 'text-align', cached.align);
+                                }
                             }
                         });
 
-                        const preBlocks = Array.from(editor.getBody().querySelectorAll('pre'));
-                        for (let i = 0; i < preBlocks.length - 1; i++) {
-                            const current = preBlocks[i];
-                            let next = current.nextSibling;
+                        const isPre = e.value.toLowerCase() === 'pre';
+                        if (isPre) {
+                            const preBlocks = Array.from(editor.getBody().querySelectorAll('pre'));
+                            for (let i = 0; i < preBlocks.length - 1; i++) {
+                                const current = preBlocks[i];
+                                let next = current.nextSibling;
 
-                            while (next && next.nodeType === 3 && next.textContent.trim() === '') {
-                                const temp = next;
-                                next = next.nextSibling;
-                                temp.remove(); // clear whitespace nodes between pre tags
-                            }
+                                while (next && next.nodeType === 3 && next.textContent.trim() === '') {
+                                    const temp = next;
+                                    next = next.nextSibling;
+                                    temp.remove(); // clear whitespace nodes between pre tags
+                                }
 
-                            if (next && next.nodeName === 'PRE') {
-                                // Merge adjacent pre blocks not inside a details wrapper
-                                if (!editor.dom.getParent(current, 'details') && !editor.dom.getParent(next, 'details')) {
-                                    // Make sure both have the same padding
-                                    const currentPadding = parseInt(editor.dom.getStyle(current, 'padding-left') || 0, 10);
-                                    const nextPadding = parseInt(editor.dom.getStyle(next, 'padding-left') || 0, 10);
+                                if (next && next.nodeName === 'PRE') {
+                                    // Merge adjacent pre blocks not inside a details wrapper
+                                    if (!editor.dom.getParent(current, 'details') && !editor.dom.getParent(next, 'details')) {
+                                        // Make sure both have the same margin and alignment
+                                        const currentMargin = parseInt(editor.dom.getStyle(current, 'margin-left') || 0, 10);
+                                        const nextMargin = parseInt(editor.dom.getStyle(next, 'margin-left') || 0, 10);
+                                        const currentAlign = editor.dom.getStyle(current, 'text-align') || '';
+                                        const nextAlign = editor.dom.getStyle(next, 'text-align') || '';
 
-                                    // Only merge if they are at the same indentation level
-                                    if (currentPadding === nextPadding) {
-                                        current.innerHTML += '\\n' + next.innerHTML;
-                                        next.remove();
+                                        // Only merge if they are at the same indentation level and alignment
+                                        if (currentMargin === nextMargin && currentAlign === nextAlign) {
+                                            current.innerHTML += '\n' + next.innerHTML;
+                                            next.remove();
 
-                                        const index = preBlocks.indexOf(next);
-                                        if (index > -1) preBlocks.splice(index, 1);
+                                            const index = preBlocks.indexOf(next);
+                                            if (index > -1) preBlocks.splice(index, 1);
 
-                                        i--; // re-check the newly merged element against upcoming siblings
+                                            i--; // re-check the newly merged element against upcoming siblings
+                                        }
                                     }
                                 }
                             }
                         }
 
                         editor.selection.moveToBookmark(bookmark);
+                    });
+                } else if (e.command === 'Indent' || e.command === 'Outdent') {
+                    // Restore margin-left from padding-left after TinyMCE finishes indenting/outdenting
+                    editor.undoManager.transact(() => {
+                        const preBlocks = Array.from(editor.getBody().querySelectorAll('pre'));
+                        preBlocks.forEach(preEl => {
+                            if (!editor.dom.getParent(preEl, 'details.log-block')) {
+                                const pl = parseInt(editor.dom.getStyle(preEl, 'padding-left') || 0, 10);
+                                if (pl > 0) {
+                                    editor.dom.setStyle(preEl, 'margin-left', pl + 'px');
+                                    editor.dom.setStyle(preEl, 'padding-left', '');
+                                } else {
+                                    editor.dom.setStyle(preEl, 'margin-left', '');
+                                    editor.dom.setStyle(preEl, 'padding-left', '');
+                                }
+                            }
+                        });
                     });
                 }
             });

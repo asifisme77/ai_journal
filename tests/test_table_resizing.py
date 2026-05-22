@@ -7,23 +7,24 @@ import time
 
 def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
     """Verifies that the first column can be made smaller by resizing from its right edge."""
-    
-    # Capture console logs
-    logs = []
-    page.on('console', lambda msg: logs.append(msg.text))
-    
     page.goto(flask_server)
-    
+
     # Wait for the page to load and items to be fetched
     page.wait_for_selector('#items-container .work-item', timeout=20000)
-    
+
     # Wait for the editor to load
     editor_locator = page.locator('div#tinymce-1')
     editor_locator.wait_for(state='visible', timeout=10000)
-    
+
     # Click inside to focus - use force=True to click through any overlays
     editor_locator.click(force=True)
-    
+
+    # Expand the work item so its content is fully visible and not clipped
+    page.evaluate('''() => {
+        document.querySelectorAll('.work-item').forEach(el => el.classList.add('expanded'));
+    }''')
+    time.sleep(0.5)
+
     # Insert a table with 3 columns
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -32,7 +33,7 @@ def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
 
     # Wait for table to be inserted and resizable
     time.sleep(1.5)
-    
+
     # Trigger table column resizing initialization
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -40,7 +41,7 @@ def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
         editor._resizeColumnsInitialized = false;
         initResizableTableColumns(editor);
     }''')
-    
+
     # Wait a bit more for initialization
     time.sleep(0.5)
 
@@ -70,7 +71,6 @@ def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
     page.mouse.move(first_cell_rect['right'] - 55, first_cell_rect['top'])
     page.mouse.up()
 
-
     # Wait for resize to complete
     time.sleep(0.5)
 
@@ -81,11 +81,6 @@ def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
         return cells.map(cell => cell.offsetWidth);
     }''')
 
-    # Print captured logs for debugging
-    print("Captured console logs:")
-    for log in logs:
-        print(f"  {log}")
-    
     # First column should be smaller
     assert final_widths[0] < initial_widths[0], f"First column should be smaller: {final_widths[0]} < {initial_widths[0]}"
 
@@ -99,17 +94,23 @@ def test_table_column_resizing_first_column_smaller(flask_server, page: Page):
 def test_table_column_resizing_middle_column(flask_server, page: Page):
     """Verifies that resizing a middle column affects adjacent columns properly."""
     page.goto(flask_server)
-    
+
     # Wait for the page to load and items to be fetched
     page.wait_for_selector('#items-container .work-item', timeout=20000)
-    
+
     # Wait for the editor to load
     editor_locator = page.locator('div#tinymce-1')
     editor_locator.wait_for(state='visible', timeout=10000)
-    
+
     # Click inside to focus - use force=True to click through any overlays
     editor_locator.click(force=True)
-    
+
+    # Expand the work item so its content is fully visible and not clipped
+    page.evaluate('''() => {
+        document.querySelectorAll('.work-item').forEach(el => el.classList.add('expanded'));
+    }''')
+    time.sleep(0.5)
+
     # Insert a table with 3 columns
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -118,7 +119,7 @@ def test_table_column_resizing_middle_column(flask_server, page: Page):
 
     # Wait for table to be inserted and resizable
     time.sleep(2)
-    
+
     # Trigger table column resizing initialization
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -130,7 +131,7 @@ def test_table_column_resizing_middle_column(flask_server, page: Page):
             initResizableTableColumns(editor);
         }
     }''')
-    
+
     # Wait a bit more for initialization
     time.sleep(0.5)
 
@@ -182,17 +183,23 @@ def test_table_column_resizing_middle_column(flask_server, page: Page):
 def test_table_column_resizing_last_column(flask_server, page: Page):
     """Verifies that the last column can be resized and affects the previous column."""
     page.goto(flask_server)
-    
+
     # Wait for the page to load and items to be fetched
     page.wait_for_selector('#items-container .work-item', timeout=20000)
-    
+
     # Wait for the editor to load
     editor_locator = page.locator('div#tinymce-1')
     editor_locator.wait_for(state='visible', timeout=10000)
-    
+
     # Click inside to focus - use force=True to click through any overlays
     editor_locator.click(force=True)
-    
+
+    # Expand the work item so its content is fully visible and not clipped
+    page.evaluate('''() => {
+        document.querySelectorAll('.work-item').forEach(el => el.classList.add('expanded'));
+    }''')
+    time.sleep(0.5)
+
     # Insert a table with 3 columns
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -201,7 +208,7 @@ def test_table_column_resizing_last_column(flask_server, page: Page):
 
     # Wait for table to be inserted and resizable
     time.sleep(2)
-    
+
     # Trigger table column resizing initialization
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -213,7 +220,7 @@ def test_table_column_resizing_last_column(flask_server, page: Page):
             initResizableTableColumns(editor);
         }
     }''')
-    
+
     # Wait a bit more for initialization
     time.sleep(0.5)
 
@@ -265,17 +272,23 @@ def test_table_column_resizing_last_column(flask_server, page: Page):
 def test_table_column_minimum_width(flask_server, page: Page):
     """Verifies that columns cannot be resized below minimum width (30px)."""
     page.goto(flask_server)
-    
+
     # Wait for the page to load and items to be fetched
     page.wait_for_selector('#items-container .work-item', timeout=20000)
-    
+
     # Wait for the editor to load
     editor_locator = page.locator('div#tinymce-1')
     editor_locator.wait_for(state='visible', timeout=10000)
-    
+
     # Click inside to focus - use force=True to click through any overlays
     editor_locator.click(force=True)
-    
+
+    # Expand the work item so its content is fully visible and not clipped
+    page.evaluate('''() => {
+        document.querySelectorAll('.work-item').forEach(el => el.classList.add('expanded'));
+    }''')
+    time.sleep(0.5)
+
     # Insert a table with 2 columns
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -284,7 +297,7 @@ def test_table_column_minimum_width(flask_server, page: Page):
 
     # Wait for table to be inserted and resizable
     time.sleep(2)
-    
+
     # Trigger table column resizing initialization
     page.evaluate('''() => {
         const editor = tinymce.get('tinymce-1');
@@ -296,7 +309,7 @@ def test_table_column_minimum_width(flask_server, page: Page):
             initResizableTableColumns(editor);
         }
     }''')
-    
+
     # Wait a bit more for initialization
     time.sleep(0.5)
 
