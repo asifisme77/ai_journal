@@ -81,6 +81,7 @@ class WorkItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     heading = db.Column(db.String(200), nullable=False)
     state = db.Column(db.String(20), default='TODO')
+    sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     memo_folder_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id'), nullable=True)
     entries = db.relationship('JournalEntry', backref='work_item', cascade='all, delete-orphan')
@@ -90,6 +91,7 @@ class WorkItem(db.Model):
             'id': self.id,
             'heading': self.heading,
             'state': self.state,
+            'sort_order': self.sort_order,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'memo_folder_id': self.memo_folder_id,
             'entries': [entry.to_dict(exclude_content=exclude_content) for entry in sorted(self.entries, key=lambda e: e.created_at.isoformat() if e.created_at else "")]
@@ -257,6 +259,20 @@ with app.app_context():
         except Exception as e:
             print(f"Error during Marker schema migration: {e}")
 
+        # Auto-migration: sort_order column on work_item
+        try:
+            inspector = inspect(db.engine)
+            if 'work_item' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('work_item')]
+                if 'sort_order' not in columns:
+                    _conn.execute(text('ALTER TABLE work_item ADD COLUMN sort_order INTEGER DEFAULT 0'))
+                    # Backfill: assign sequential sort_order based on current created_at DESC order
+                    rows = _conn.execute(text('SELECT id FROM work_item ORDER BY created_at DESC')).fetchall()
+                    for idx, row in enumerate(rows):
+                        _conn.execute(text('UPDATE work_item SET sort_order = :order WHERE id = :id'), {'order': idx, 'id': row[0]})
+        except Exception as e:
+            print(f"Error during sort_order migration: {e}")
+
         # Backfill FTS index on startup (idempotent — deletes first)
         try:
             _conn.execute(text("DELETE FROM search_index"))
@@ -313,10 +329,10 @@ def index():
 
 @app.route('/api/items', methods=['GET'])
 def get_items():
-    """List all work items (newest first) with their entries."""
+    """List all work items ordered by priority (sort_order) with their entries."""
     items = db.session.query(WorkItem).options(
         joinedload(WorkItem.entries).joinedload(JournalEntry.markers)
-    ).order_by(WorkItem.created_at.desc()).all()
+    ).order_by(WorkItem.sort_order.asc(), WorkItem.created_at.desc()).all()
     return jsonify([item.to_dict() for item in items])
 
 @app.route('/api/timeline', methods=['GET'])
@@ -332,13 +348,17 @@ def get_timeline():
 
 @app.route('/api/items', methods=['POST'])
 def create_item():
-    """Create a new work item."""
+    """Create a new work item. New items go to the top of the priority list."""
     data = request.json
     heading = data.get('heading')
     if not heading:
         return jsonify({'error': 'Heading is required'}), 400
 
-    new_item = WorkItem(heading=heading, state=data.get('state', 'TODO'))
+    # Push all existing items down by 1 so the new item lands at position 0
+    db.session.execute(
+        text('UPDATE work_item SET sort_order = sort_order + 1')
+    )
+    new_item = WorkItem(heading=heading, state=data.get('state', 'TODO'), sort_order=0)
     db.session.add(new_item)
     db.session.commit()
     with db.engine.connect() as conn:
@@ -380,6 +400,23 @@ def delete_item(item_id):
         fts_delete_item(conn, item_id_to_delete)
         conn.commit()
     return '', 204
+
+
+@app.route('/api/items/reorder', methods=['POST'])
+def reorder_items():
+    """Bulk-update sort_order for work items based on the provided ordered list of IDs."""
+    data = request.json
+    order = data.get('order', [])
+    if not order or not isinstance(order, list):
+        return jsonify({'error': 'An ordered list of item IDs is required'}), 400
+
+    for idx, item_id in enumerate(order):
+        db.session.execute(
+            text('UPDATE work_item SET sort_order = :order WHERE id = :id'),
+            {'order': idx, 'id': item_id}
+        )
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 # ============================================================================
@@ -634,7 +671,7 @@ def search_items():
                 query = query.filter(WorkItem.created_at <= to_dt)
             except ValueError:
                 pass
-        items = query.order_by(WorkItem.created_at.desc()).all()
+        items = query.order_by(WorkItem.sort_order.asc(), WorkItem.created_at.desc()).all()
         return jsonify([item.to_dict() for item in items])
 
     # --- Text query: FTS5 path ---

@@ -206,6 +206,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
                 div.onclick = () => window.focusEntry(marker.entry_id, marker.is_archived, marker.work_item_id, marker.is_status_marker ? null : marker.id);
+                div.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.openMarkerPopover(
+                        marker.id,
+                        e.clientX,
+                        e.clientY,
+                        null,
+                        null,
+                        marker.entry_id,
+                        marker.is_status_marker
+                    );
+                });
                 container.appendChild(div);
             });
         } catch (error) {
@@ -609,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.innerHTML = `
             <div class="work-item-header">
                 <div class="work-item-title-group">
+                    <i class="ph ph-dots-six-vertical drag-handle" title="Drag to reorder"></i>
                     <i class="ph ph-caret-down toggle-icon"></i>
                     <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; margin-right: 1rem;">
                         <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)">
@@ -636,8 +650,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Toggle expand/collapse on header click
         div.querySelector('.work-item-header').addEventListener('click', (e) => {
-            // Ignore clicks on buttons/selects (these handle their own logic)
-            if (e.target.closest('button') || e.target.closest('select')) return;
+            // Ignore clicks on buttons/selects/drag handle (these handle their own logic)
+            if (e.target.closest('button') || e.target.closest('select') || e.target.closest('.drag-handle')) return;
 
             const isInput = e.target.tagName === 'INPUT';
             const isExpanded = div.classList.contains('expanded');
@@ -649,6 +663,34 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 div.classList.toggle('expanded');
             }
+        });
+
+        // --- Drag-and-drop: make work item draggable via handle ---
+        div.draggable = false; // Not draggable by default
+        const dragHandle = div.querySelector('.drag-handle');
+        dragHandle.addEventListener('mousedown', () => { div.draggable = true; });
+        // Reset draggable on mouseup anywhere (in case drag didn't start)
+        document.addEventListener('mouseup', () => { div.draggable = false; }, { once: false });
+
+        div.addEventListener('dragstart', (e) => {
+            // Only allow drag if initiated from the handle
+            if (!div.draggable) { e.preventDefault(); return; }
+            e.dataTransfer.setData('text/work-item-id', String(item.id));
+            e.dataTransfer.effectAllowed = 'move';
+            div.classList.add('dragging');
+            // Disable pointer events on iframes to prevent drag interference
+            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
+        });
+
+        div.addEventListener('dragend', () => {
+            div.draggable = false;
+            div.classList.remove('dragging');
+            // Re-enable iframe pointer events
+            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
+            // Remove all drop indicators
+            document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+            document.querySelectorAll('.work-item.drop-above').forEach(el => el.classList.remove('drop-above'));
+            document.querySelectorAll('.work-item.drop-below').forEach(el => el.classList.remove('drop-below'));
         });
 
         if (prepend) {
@@ -905,6 +947,126 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.fetchItems = fetchItems;
     window.fetchReminders = fetchReminders;
+
+    // ========================================================================
+    // WORK ITEM DRAG-AND-DROP REORDERING
+    // ========================================================================
+
+    /**
+     * Sets up dragover/drop listeners on the items container to enable
+     * drag-and-drop reordering of work items.
+     */
+    function initWorkItemDragDrop() {
+        itemsContainer.addEventListener('dragover', (e) => {
+            const draggedId = e.dataTransfer.types.includes('text/work-item-id');
+            if (!draggedId) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            // Remove existing indicators
+            document.querySelectorAll('.work-item.drop-above').forEach(el => el.classList.remove('drop-above'));
+            document.querySelectorAll('.work-item.drop-below').forEach(el => el.classList.remove('drop-below'));
+
+            // Find the closest work-item to the mouse position
+            const items = [...itemsContainer.querySelectorAll('.work-item:not(.dragging)')];
+            let closestItem = null;
+            let insertBefore = true;
+            let closestDist = Infinity;
+
+            items.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                const dist = Math.abs(e.clientY - midY);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestItem = item;
+                    insertBefore = e.clientY < midY;
+                }
+            });
+
+            if (closestItem) {
+                if (insertBefore) {
+                    closestItem.classList.add('drop-above');
+                } else {
+                    closestItem.classList.add('drop-below');
+                }
+            }
+        });
+
+        itemsContainer.addEventListener('dragleave', (e) => {
+            if (!itemsContainer.contains(e.relatedTarget)) {
+                document.querySelectorAll('.work-item.drop-above').forEach(el => el.classList.remove('drop-above'));
+                document.querySelectorAll('.work-item.drop-below').forEach(el => el.classList.remove('drop-below'));
+            }
+        });
+
+        itemsContainer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const draggedItemId = e.dataTransfer.getData('text/work-item-id');
+            if (!draggedItemId) return;
+
+            // Remove indicators
+            document.querySelectorAll('.work-item.drop-above').forEach(el => el.classList.remove('drop-above'));
+            document.querySelectorAll('.work-item.drop-below').forEach(el => el.classList.remove('drop-below'));
+
+            const draggedEl = itemsContainer.querySelector(`.work-item[data-id="${draggedItemId}"]`);
+            if (!draggedEl) return;
+
+            // Find target position
+            const items = [...itemsContainer.querySelectorAll('.work-item:not(.dragging)')];
+            let closestItem = null;
+            let insertBefore = true;
+            let closestDist = Infinity;
+
+            items.forEach(item => {
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                const dist = Math.abs(e.clientY - midY);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestItem = item;
+                    insertBefore = e.clientY < midY;
+                }
+            });
+
+            // Move the DOM element
+            if (closestItem) {
+                if (insertBefore) {
+                    itemsContainer.insertBefore(draggedEl, closestItem);
+                } else {
+                    itemsContainer.insertBefore(draggedEl, closestItem.nextSibling);
+                }
+            }
+
+            // Persist the new order
+            persistReorder();
+        });
+    }
+
+    /**
+     * Reads the current DOM order of work items in the main container
+     * and persists it to the backend.
+     */
+    async function persistReorder() {
+        const orderedIds = [...itemsContainer.querySelectorAll('.work-item')]
+            .map(el => parseInt(el.dataset.id, 10))
+            .filter(id => !isNaN(id));
+
+        if (orderedIds.length === 0) return;
+
+        try {
+            await fetch('/api/items/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: orderedIds })
+            });
+        } catch (error) {
+            console.error('Error persisting reorder:', error);
+        }
+    }
+
+    // Initialize drag-and-drop on the items container
+    initWorkItemDragDrop();
 
     /**
      * Refreshes only the sidebar components (Reminders & Timeline)
@@ -2174,9 +2336,18 @@ function initTinyMCE(entry, autoFocus = false) {
                         const selectedBlocks = editor.selection.getSelectedBlocks();
                         let modified = false;
 
-                        // Start a transaction so moveToBookmark can track across any nodes we split
+                        // Start a transaction so cursor tracking can be undone atomically
                         editor.undoManager.transact(() => {
-                            const bookmark = editor.selection.getBookmark(2, true);
+                            let marker = null;
+                            try {
+                                const range = editor.selection.getRng();
+                                if (range) {
+                                    marker = editor.dom.create('span', { id: 'temp-tab-marker', style: 'display:none;' });
+                                    range.insertNode(marker);
+                                }
+                            } catch (err) {
+                                console.error('Error inserting temporary tab marker:', err);
+                            }
 
                             selectedBlocks.forEach(block => {
                                 // Prevent this logic from touching the editor container, tables, or pre tags
@@ -2205,7 +2376,14 @@ function initTinyMCE(entry, autoFocus = false) {
                             });
 
                             if (modified) {
-                                editor.selection.moveToBookmark(bookmark);
+                                const markerInDom = editor.dom.select('#temp-tab-marker')[0];
+                                if (markerInDom) {
+                                    editor.selection.select(markerInDom);
+                                    editor.selection.collapse(true);
+                                    editor.dom.remove(markerInDom);
+                                }
+                            } else if (marker) {
+                                editor.dom.remove(marker);
                             }
                         });
                     }
@@ -2224,11 +2402,22 @@ function initTinyMCE(entry, autoFocus = false) {
 
 let currentMarkerContext = null;
 
-window.openMarkerPopover = function (markerId, x, y, editorInstance, bubbleElement) {
+window.openMarkerPopover = function (markerId, x, y, editorInstance, bubbleElement, entryId = null, isStatusMarker = false) {
     const popover = document.getElementById('marker-popover');
     if (!popover) return;
 
-    currentMarkerContext = { markerId, editor: editorInstance, bubble: bubbleElement };
+    // Resolve editor and bubble if not explicitly passed but entryId is available
+    const activeEditor = editorInstance || (entryId ? tinymce.get(`tinymce-${entryId}`) : null);
+    const activeBubble = bubbleElement || (activeEditor ? activeEditor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`)[0] : null);
+    const resolvedEntryId = entryId || (activeEditor ? activeEditor.id.split('-')[1] : null);
+
+    currentMarkerContext = { 
+        markerId, 
+        editor: activeEditor, 
+        bubble: activeBubble,
+        entryId: resolvedEntryId,
+        isStatusMarker
+    };
 
     popover.style.left = `${x}px`;
     popover.style.top = `${y + 10}px`;
@@ -2255,7 +2444,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Hide popover when clicking outside
     document.addEventListener('click', (e) => {
-        if (!popover.contains(e.target) && !e.target.classList.contains('marker-bubble')) {
+        if (!popover.contains(e.target) && !e.target.classList.contains('marker-bubble') && !e.target.closest('.reminder-item')) {
             hidePopover();
         }
     });
@@ -2263,7 +2452,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Close Marker
     btnCloseMarker.addEventListener('click', async () => {
         if (!currentMarkerContext) return;
-        const { markerId, editor, bubble } = currentMarkerContext;
+        const { markerId, editor, entryId, isStatusMarker } = currentMarkerContext;
+
+        if (isStatusMarker) {
+            try {
+                await window.updateEntryStatus(entryId, "");
+                // Update select element in DOM if it exists
+                const selectEl = document.querySelector(`.journal-entry[data-entry-id="${entryId}"] .entry-status-select`);
+                if (selectEl) {
+                    selectEl.value = "";
+                }
+                hidePopover();
+            } catch (error) {
+                console.error('Error closing status marker:', error);
+            }
+            return;
+        }
 
         try {
             const res = await fetch(`/api/markers/${markerId}`, {
@@ -2273,29 +2477,70 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (res.ok) {
-                // Remove all associated bubbles (handles potential duplicates)
-                const bubbles = editor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`);
-                bubbles.forEach(b => editor.dom.remove(b));
+                if (editor) {
+                    // Remove all associated bubbles (handles potential duplicates)
+                    const bubbles = editor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`);
+                    bubbles.forEach(b => editor.dom.remove(b));
 
-                // Unwrap all associated spans (handles potential duplicates)
-                const markerSpans = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`);
-                markerSpans.forEach(span => {
-                    editor.dom.remove(span, true); // true = keep children (unwrap)
-                });
-
-                // Force sync save directly to DB before reloading the page!
-                // The auto-save debounce takes 2s and would be terminated by reload.
-                const entryId = editor.id.split('-')[1];
-                if (entryId) {
-                    const currentContent = editor.getContent();
-                    await fetch(`/api/entries/${entryId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content: currentContent })
+                    // Unwrap all associated spans (handles potential duplicates)
+                    const markerSpans = editor.dom.select(`span.marker[data-marker-id="${markerId}"]`);
+                    markerSpans.forEach(span => {
+                        editor.dom.remove(span, true); // true = keep children (unwrap)
                     });
+
+                    // Force sync save directly to DB before reloading the page!
+                    // The auto-save debounce takes 2s and would be terminated by reload.
+                    if (entryId) {
+                        const currentContent = editor.getContent();
+                        await fetch(`/api/entries/${entryId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: currentContent })
+                        });
+                    }
+
+                    editor.fire('change');
+                } else if (entryId) {
+                    // If editor is not open/loaded, we modify the entry content in the DB
+                    if (!window.allItemsData) {
+                        const itemsRes = await fetch('/api/items');
+                        window.allItemsData = await itemsRes.json();
+                    }
+                    let entryContent = "";
+                    for (const item of window.allItemsData) {
+                        const found = item.entries.find(e => e.id === entryId);
+                        if (found) {
+                            entryContent = found.content;
+                            break;
+                        }
+                    }
+                    if (entryContent) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(entryContent, 'text/html');
+                        
+                        // Remove all associated bubbles
+                        const bubbles = doc.querySelectorAll(`.marker-bubble[data-marker-id="${markerId}"]`);
+                        bubbles.forEach(b => b.remove());
+
+                        // Unwrap all associated spans
+                        const markerSpans = doc.querySelectorAll(`span.marker[data-marker-id="${markerId}"]`);
+                        markerSpans.forEach(span => {
+                            const parent = span.parentNode;
+                            while (span.firstChild) {
+                                parent.insertBefore(span.firstChild, span);
+                            }
+                            span.remove();
+                        });
+                        const updatedContent = doc.body.innerHTML;
+
+                        await fetch(`/api/entries/${entryId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: updatedContent })
+                        });
+                    }
                 }
 
-                editor.fire('change');
                 hidePopover();
 
                 // Refresh sidebar dynamically instead of full page reload
@@ -2309,7 +2554,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set Reminder
     btnSaveReminder.addEventListener('click', async () => {
         if (!currentMarkerContext) return;
-        const { markerId, editor, bubble } = currentMarkerContext;
+        const { markerId, editor, bubble, entryId } = currentMarkerContext;
         const dateVal = reminderInput.value;
 
         const payload = { reminder_due_date: dateVal ? new Date(dateVal).toISOString() : null };
@@ -2322,16 +2567,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (res.ok) {
-                if (editor && bubble) {
+                const activeBubble = bubble || (editor ? editor.dom.select(`.marker-bubble[data-marker-id="${markerId}"]`)[0] : null);
+                if (editor && activeBubble) {
                     if (dateVal) {
-                        bubble.classList.add('has-reminder');
+                        activeBubble.classList.add('has-reminder');
                     } else {
-                        bubble.classList.remove('has-reminder');
+                        activeBubble.classList.remove('has-reminder');
                     }
 
-                    const entryId = editor.id.split('-')[1];
-                    if (entryId) {
-                        await fetch(`/api/entries/${entryId}`, {
+                    const resolvedEntryId = entryId || editor.id.split('-')[1];
+                    if (resolvedEntryId) {
+                        await fetch(`/api/entries/${resolvedEntryId}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ content: editor.getContent() })

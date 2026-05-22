@@ -19,6 +19,7 @@ The database (`journal.db`) consists of two primary models utilizing a one-to-ma
     *   `id`: Integer (Primary Key)
     *   `heading`: String (Required, title of the work item)
     *   `state`: String (Enum-like string: 'TODO', 'WIP', 'DONE')
+    *   `sort_order`: Integer (Controls display priority; lower values appear first. Defaults to 0.)
     *   `created_at`: DateTime (Defaults to current UTC time)
     *   `entries`: SQLAlchemy relationship bridging to JournalEntry models (Cascade deletes are enabled).
 
@@ -38,6 +39,7 @@ The Flask backend serves the main HTML template and provides a RESTful JSON API:
 *   `POST /api/items`: Creates a new WorkItem. Requires a `heading`.
 *   `PUT /api/items/<id>`: Updates a WorkItem's `heading` or `state`.
 *   `DELETE /api/items/<id>`: Safely deletes a WorkItem and cascade deletes its associated Journal Entries.
+*   `POST /api/items/reorder`: Accepts `{ "order": [id1, id2, ...] }` to bulk-update the `sort_order` of work items for drag-and-drop priority reordering.
 *   `POST /api/items/<id>/entries`: Creates a new JournalEntry under a specific WorkItem. Accepts an optional `title` and `content`.
 *   `PUT /api/entries/<id>`: Updates a JournalEntry's `title` or `content` (HTML string).
 *   `DELETE /api/entries/<id>`: Deletes a specific JournalEntry.
