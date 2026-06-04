@@ -608,44 +608,65 @@ body {
 
 .entry-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 0;
+    gap: 0.25rem;
     padding: 0.15rem 0.4rem;
     background: var(--journal-header-background);
     border: none;
-    min-width: 0;
+    min-height: 38px;
+    flex-wrap: nowrap;
+    overflow: visible;
 }
 
 .journal-entry.expanded .entry-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.entry-title-block {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 1;
+    flex-grow: 1;
+    min-width: 60px;
+    gap: 0px;
+    overflow: hidden;
+}
+
 .entry-title-input {
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-muted);
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     font-weight: 500;
-    padding: 0.25rem 0.5rem;
+    padding: 0.1rem 0.3rem;
     border-radius: 4px;
     width: 100%;
-    margin-right: 1rem;
+    margin-right: 0;
     font-family: inherit;
     transition: all 0.2s;
     min-width: 0;
 }
 
 .journal-entry.editing-active .entry-title-input {
-    font-weight: 700;
     color: var(--text-main);
+    font-weight: 600;
 }
 
-.entry-title-input:focus {
+.journal-entry.title-editing .entry-title-input {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-main);
     background: rgba(59, 130, 246, 0.08);
     border-color: rgba(59, 130, 246, 0.4);
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
-    color: var(--text-main);
+}
+
+.entry-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .item-title-input {
@@ -697,9 +718,12 @@ body {
 }
 
 .entry-date {
-    font-size: 0.8rem;
+    font-size: 0.6rem;
     color: var(--text-muted);
+    opacity: 0.6;
     white-space: nowrap;
+    padding-left: 0.3rem;
+    line-height: 1;
 }
 
 /* Entry Toggle & Collapse */
@@ -770,33 +794,30 @@ body {
 /* Sticky Inline Toolbar (inside entry card) */
 .entry-toolbar-container {
     display: none;               /* hidden by default */
-    position: sticky;
-    top: 0;
-    z-index: 2000;               /* Sit above all editor content, handles, selection borders, and resizers */
-    background: var(--toolbar-background);
-    border-bottom: 1px solid var(--border-main);
-    padding: 2px 4px;
+    background: transparent;
+    padding: 0;
     flex-wrap: nowrap;
     align-items: center;
-    justify-content: flex-end;   /* Right align the toolbar items within the card */
     overflow: visible;
     flex-shrink: 0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
 }
 
 .entry-toolbar-container.toolbar-visible {
     display: flex;
-    animation: toolbarSlideIn 0.15s ease-out;
+    animation: toolbarFadeIn 0.15s ease-out;
 }
 
-@keyframes toolbarSlideIn {
+/* Hide toolbar when title specifically is being edited */
+.journal-entry.title-editing .entry-toolbar-container {
+    display: none !important;
+}
+
+@keyframes toolbarFadeIn {
     from {
         opacity: 0;
-        transform: translateY(-4px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 
@@ -1326,7 +1347,7 @@ details.timeline-date>summary {
 
 .entry-toolbar-container .tox-toolbar__group {
     padding: 0 2px !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-right: 1px solid var(--border-main) !important;
     display: flex;
     align-items: center;
 }

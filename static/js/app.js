@@ -1378,7 +1378,10 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     entryDiv.dataset.entryId = entry.id;
 
     const dateObj = parseUTCDate(entry.created_at);
-    const dateStr = dateObj.toLocaleDateString()
+    const compactDateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        + ', '
+        + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const dateTooltipStr = dateObj.toLocaleDateString()
         + ' at '
         + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
@@ -1388,12 +1391,15 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
         : '';
 
     entryDiv.innerHTML = `
-        <div class="entry-header" style="display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: nowrap; overflow: visible; min-height: 28px; cursor: pointer;">
+        <div class="entry-header" style="cursor: pointer;">
             <i class="ph ph-caret-down entry-toggle-icon"></i>
-            <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onfocus="this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="flex-grow: 1; flex-shrink: 1; min-width: 40px; margin-right: 0; padding: 0.15rem;">
-            <div class="entry-meta" style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto;">
-                <span class="entry-date" style="white-space: nowrap;">${dateStr}</span>
-                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" onclick="event.stopPropagation()" style="background: transparent; border: 1px solid var(--border-main); color: var(--text-muted); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-left: 0.25rem;">
+            <div class="entry-title-block">
+                <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onfocus="this.closest('.journal-entry').classList.add('title-editing'); this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('title-editing'); this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="margin-right: 0; padding: 0.15rem;">
+                <span class="entry-date" title="${dateTooltipStr}">${compactDateStr}</span>
+            </div>
+            <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
+            <div class="entry-actions" onclick="event.stopPropagation()">
+                <select class="entry-status-select" onchange="updateEntryStatus(${entry.id}, this.value)" style="background: transparent; border: 1px solid var(--border-main); color: var(--text-muted); border-radius: 4px; padding: 0.1rem; font-size: 0.75rem; outline: none; margin-left: 0.25rem;">
                     <option value="" ${!entry.status ? 'selected' : ''}>NONE</option>
                     <option value="FOLLOWUP" ${entry.status === 'FOLLOWUP' ? 'selected' : ''}>FOLLOWUP</option>
                     <option value="DONE" ${entry.status === 'DONE' ? 'selected' : ''}>DONE</option>
@@ -1404,7 +1410,6 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
         </div>
         <div class="entry-content">
             <div class="entry-content-inner">
-                <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
                 <div id="tinymce-${entry.id}" class="tinymce-editor">${entry.content || '<p><br></p>'}</div>
             </div>
         </div>
@@ -1413,8 +1418,8 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     // Toggle expand/collapse on header click
     entryDiv.querySelector('.entry-header').addEventListener('click', (e) => {
         // Stop propagation to prevent nested clicks from firing parent events
-        // However, do not stop it if we are clicking a button/select that needs to trigger its own global handler
-        if (e.target.closest('button') || e.target.closest('select')) return;
+        // However, do not stop it if we are clicking a button/select/toolbar/actions that needs to trigger its own global handler
+        if (e.target.closest('button') || e.target.closest('select') || e.target.closest('.entry-actions') || e.target.closest('.entry-toolbar-container')) return;
 
         e.stopPropagation();
 
@@ -1464,7 +1469,24 @@ function initTinyMCE(entry, autoFocus = false) {
         promotion: false,
         extended_valid_elements: 'details[class|open|style],summary,span[class|data-marker-id|contenteditable|title|style]',
         plugins: 'lists link table autolink nonbreaking forecolor backcolor',
-        toolbar: 'blocks fontfamily forecolor backcolor | setparagraph setpreformatted bold italic underline strikethrough | alignleft aligncenter alignright alignjustify | bullist numlist | outdent indent | table link embedfile collapsible | removeformatwithindent',
+        toolbar: 'setparagraph setpreformatted collapsible table | bold italic underline strikethrough | bullist numlist | outdent indent | formatting alignment inserting',
+        toolbar_groups: {
+            formatting: {
+                icon: 'format',
+                tooltip: 'More Formatting',
+                items: 'blocks fontfamily forecolor backcolor | removeformatwithindent'
+            },
+            alignment: {
+                icon: 'align-left',
+                tooltip: 'Alignment',
+                items: 'alignleft aligncenter alignright alignjustify'
+            },
+            inserting: {
+                icon: 'plus',
+                tooltip: 'Insert',
+                items: 'link embedfile'
+            }
+        },
         contextmenu: 'addmarker | cut copy paste | link table',
         table_default_attributes: {
             border: '0'
