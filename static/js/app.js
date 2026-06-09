@@ -1463,6 +1463,7 @@ function initTinyMCE(entry, autoFocus = false) {
         ui_container: 'body',
         skin: currentTheme === 'light' ? 'oxide' : 'oxide-dark',
         content_css: currentTheme === 'light' ? 'default' : 'dark',
+        font_family_formats: 'Lexend=Lexend,sans-serif; Inter=Inter,sans-serif; Arial=Arial,Helvetica,sans-serif; Courier New=Courier New,Courier,monospace; Georgia=Georgia,serif; Times New Roman=Times New Roman,Times,serif; Verdana=Verdana,Geneva,sans-serif',
         menubar: false,
         statusbar: false,
         branding: false,

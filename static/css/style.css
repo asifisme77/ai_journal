@@ -823,6 +823,7 @@ body {
 
 /* ----- Inline TinyMCE Editor Styling ----- */
 .tinymce-editor {
+    font-family: 'Lexend', sans-serif;
     border: none;
     border-radius: 0;
     background: var(--editor-background);
