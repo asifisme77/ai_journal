@@ -2375,28 +2375,152 @@ function initTinyMCE(entry, autoFocus = false) {
             // ================================================================
 
             editor.on('keydown', function (event) {
-                // Table Cell Block Escape (Arrow keys)
+                // Table Cell / PRE Block Escape (Arrow keys)
                 if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                     const node = editor.selection.getNode();
-                    const targetBlock = editor.dom.getParent(node, 'PRE, DETAILS');
-                    if (targetBlock && editor.dom.getParent(targetBlock, 'TD,TH')) {
-                        if (event.key === 'ArrowDown') {
-                            let next = targetBlock.nextSibling;
-                            while (next && next.nodeType === 3 && next.textContent.trim() === '') {
-                                next = next.nextSibling;
+                    const preBlock = editor.dom.getParent(node, 'PRE');
+                    
+                    if (preBlock) {
+                        const range = editor.selection.getRng();
+                        if (range) {
+                            // Clone range to check for newlines/BRs before and after cursor
+                            const preStartRange = range.cloneRange();
+                            preStartRange.selectNodeContents(preBlock);
+                            preStartRange.setEnd(range.startContainer, range.startOffset);
+                            
+                            const preEndRange = range.cloneRange();
+                            preEndRange.selectNodeContents(preBlock);
+                            preEndRange.setStart(range.endContainer, range.endOffset);
+                            
+                            const textBefore = preStartRange.toString();
+                            const textAfter = preEndRange.toString();
+                            
+                            // Normalize text to ignore a single trailing or leading newline/carriage return
+                            const cleanTextBefore = textBefore.replace(/^\r?\n/, '');
+                            const cleanTextAfter = textAfter.replace(/\r?\n$/, '');
+                            
+                            const fragBefore = preStartRange.cloneContents();
+                            const fragAfter = preEndRange.cloneContents();
+                            
+                            // Check if there are any non-trailing/non-leading BR breaks
+                            const brsBefore = fragBefore.querySelectorAll('br');
+                            let hasBrBreakBefore = false;
+                            if (brsBefore.length > 0) {
+                                for (let i = 0; i < brsBefore.length; i++) {
+                                    const br = brsBefore[i];
+                                    let prev = br.previousSibling;
+                                    while (prev) {
+                                        if (prev.textContent.trim() !== '') {
+                                            hasBrBreakBefore = true;
+                                            break;
+                                        }
+                                        prev = prev.previousSibling;
+                                    }
+                                    if (hasBrBreakBefore) break;
+                                }
                             }
-                            if (!next) {
-                                const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-                                editor.dom.insertAfter(p, targetBlock);
+                            
+                            const brsAfter = fragAfter.querySelectorAll('br');
+                            let hasBrBreakAfter = false;
+                            if (brsAfter.length > 0) {
+                                for (let i = 0; i < brsAfter.length; i++) {
+                                    const br = brsAfter[i];
+                                    let next = br.nextSibling;
+                                    while (next) {
+                                        if (next.textContent.trim() !== '') {
+                                            hasBrBreakAfter = true;
+                                            break;
+                                        }
+                                        next = next.nextSibling;
+                                    }
+                                    if (hasBrBreakAfter) break;
+                                }
                             }
-                        } else if (event.key === 'ArrowUp') {
-                            let prev = targetBlock.previousSibling;
-                            while (prev && prev.nodeType === 3 && prev.textContent.trim() === '') {
-                                prev = prev.previousSibling;
+                            
+                            const hasNewLineBefore = cleanTextBefore.includes('\n') || cleanTextBefore.includes('\r') || hasBrBreakBefore;
+                            const hasNewLineAfter = cleanTextAfter.includes('\n') || cleanTextAfter.includes('\r') || hasBrBreakAfter;
+                            
+                            if (event.key === 'ArrowDown' && !hasNewLineAfter) {
+                                let nextBlock = preBlock.nextSibling;
+                                while (nextBlock && nextBlock.nodeType === 3 && nextBlock.textContent.trim() === '') {
+                                    nextBlock = nextBlock.nextSibling;
+                                }
+                                if (!nextBlock) {
+                                    const ml = editor.dom.getStyle(preBlock, 'margin-left');
+                                    const styleAttr = ml ? `padding-left: ${ml};` : '';
+                                    const p = editor.dom.create('p', styleAttr ? { style: styleAttr } : {}, '<br data-mce-bogus="1">');
+                                    editor.dom.insertAfter(p, preBlock);
+                                    nextBlock = p;
+                                }
+                                if (nextBlock.nodeName === 'TABLE') {
+                                    const firstCell = nextBlock.querySelector('td, th');
+                                    if (firstCell) {
+                                        editor.selection.select(firstCell, true);
+                                        editor.selection.collapse(true);
+                                    } else {
+                                        editor.selection.select(nextBlock, true);
+                                        editor.selection.collapse(true);
+                                    }
+                                } else {
+                                    editor.selection.select(nextBlock, true);
+                                    editor.selection.collapse(true);
+                                }
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return false;
+                            } else if (event.key === 'ArrowUp' && !hasNewLineBefore) {
+                                let prevBlock = preBlock.previousSibling;
+                                while (prevBlock && prevBlock.nodeType === 3 && prevBlock.textContent.trim() === '') {
+                                    prevBlock = prevBlock.previousSibling;
+                                }
+                                if (!prevBlock) {
+                                    const ml = editor.dom.getStyle(preBlock, 'margin-left');
+                                    const styleAttr = ml ? `padding-left: ${ml};` : '';
+                                    const p = editor.dom.create('p', styleAttr ? { style: styleAttr } : {}, '<br data-mce-bogus="1">');
+                                    preBlock.parentNode.insertBefore(p, preBlock);
+                                    prevBlock = p;
+                                }
+                                if (prevBlock.nodeName === 'TABLE') {
+                                    const cells = prevBlock.querySelectorAll('td, th');
+                                    if (cells.length > 0) {
+                                        const lastCell = cells[cells.length - 1];
+                                        editor.selection.select(lastCell, true);
+                                        editor.selection.collapse(false);
+                                    } else {
+                                        editor.selection.select(prevBlock, true);
+                                        editor.selection.collapse(false);
+                                    }
+                                } else {
+                                    editor.selection.select(prevBlock, true);
+                                    editor.selection.collapse(false);
+                                }
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return false;
                             }
-                            if (!prev) {
-                                const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
-                                targetBlock.parentNode.insertBefore(p, targetBlock);
+                        }
+                    } else {
+                        // Fallback/Legacy for DETAILS log blocks inside tables
+                        const targetBlock = editor.dom.getParent(node, 'DETAILS');
+                        if (targetBlock && editor.dom.getParent(targetBlock, 'TD,TH')) {
+                            if (event.key === 'ArrowDown') {
+                                let next = targetBlock.nextSibling;
+                                while (next && next.nodeType === 3 && next.textContent.trim() === '') {
+                                    next = next.nextSibling;
+                                }
+                                if (!next) {
+                                    const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+                                    editor.dom.insertAfter(p, targetBlock);
+                                }
+                            } else if (event.key === 'ArrowUp') {
+                                let prev = targetBlock.previousSibling;
+                                while (prev && prev.nodeType === 3 && prev.textContent.trim() === '') {
+                                    prev = prev.previousSibling;
+                                }
+                                if (!prev) {
+                                    const p = editor.dom.create('p', {}, '<br data-mce-bogus="1">');
+                                    targetBlock.parentNode.insertBefore(p, targetBlock);
+                                }
                             }
                         }
                     }
