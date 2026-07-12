@@ -607,11 +607,6 @@ document.addEventListener('DOMContentLoaded', () => {
         div.className = 'work-item';
         div.dataset.id = item.id;
 
-        const dateObj = parseUTCDate(item.created_at);
-        const timeStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })
-            + ' at '
-            + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
         // Build folder path for MEMO items
         let folderPathHtml = '';
         if (item.state === 'MEMO' && item.memo_folder_id && window.folderPathMap && window.folderPathMap[item.memo_folder_id]) {
@@ -619,14 +614,21 @@ document.addEventListener('DOMContentLoaded', () => {
             folderPathHtml = `<span class="work-item-folder-path" title="${escapeHtml(path)}"><i class="ph ph-folder-open"></i> ${escapeHtml(path)}</span>`;
         }
 
+        const metaRowHtml = folderPathHtml
+            ? `<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding-left: 1.2rem;"><i class="ph ph-folder-open"></i> ${folderPathHtml}</div>`
+            : '';
+
         div.innerHTML = `
             <div class="work-item-header">
                 <div class="work-item-title-group">
                     <i class="ph ph-dots-six-vertical drag-handle" title="Drag to reorder"></i>
-                    <i class="ph ph-caret-down toggle-icon"></i>
                     <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; margin-right: 1rem;">
-                        <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)">
-                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0;"><i class="ph ph-clock"></i> ${timeStr}${folderPathHtml}</div>
+                        <div style="display: flex; align-items: center; gap: 0.35rem; width: 100%;">
+                            <i class="ph ph-plus toggle-icon toggle-icon-collapsed" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
+                            <i class="ph ph-minus toggle-icon toggle-icon-expanded" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
+                            <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)">
+                        </div>
+                        ${metaRowHtml}
                     </div>
                 </div>
                 <div class="item-actions" onclick="event.stopPropagation()">
@@ -1377,14 +1379,6 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
     entryDiv.className = `journal-entry ${initiallyExpanded ? 'expanded' : ''}`;
     entryDiv.dataset.entryId = entry.id;
 
-    const dateObj = parseUTCDate(entry.created_at);
-    const compactDateStr = dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-        + ', '
-        + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const dateTooltipStr = dateObj.toLocaleDateString()
-        + ' at '
-        + dateObj.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
     // Only the last entry in a work item gets the green "+" button
     const addButtonHTML = isLast
         ? `<button class="btn-secondary btn-small" style="border: none; padding: 0.25rem; color: #4ade80; margin-right: 2px;" onclick="addEntry(${entry.work_item_id})" title="Add new entry"><i class="ph ph-plus-circle"></i></button>`
@@ -1392,10 +1386,10 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
 
     entryDiv.innerHTML = `
         <div class="entry-header" style="cursor: pointer;">
-            <i class="ph ph-caret-down entry-toggle-icon"></i>
             <div class="entry-title-block">
+                <i class="ph ph-plus entry-toggle-icon toggle-icon-collapsed" style="font-size: 0.8rem; flex-shrink: 0; cursor: pointer;"></i>
+                <i class="ph ph-minus entry-toggle-icon toggle-icon-expanded" style="font-size: 0.8rem; flex-shrink: 0; cursor: pointer;"></i>
                 <input type="text" class="entry-title-input" value="${escapeHtml(entry.title)}" onchange="updateEntryTitle(${entry.id}, this.value)" onfocus="this.closest('.journal-entry').classList.add('title-editing'); this.closest('.journal-entry').classList.add('editing-active'); this.closest('.work-item').classList.add('task-editing-active');" onblur="this.closest('.journal-entry').classList.remove('title-editing'); this.closest('.journal-entry').classList.remove('editing-active'); this.closest('.work-item').classList.remove('task-editing-active');" style="margin-right: 0; padding: 0.15rem;">
-                <span class="entry-date" title="${dateTooltipStr}">${compactDateStr}</span>
             </div>
             <div id="toolbar-${entry.id}" class="entry-toolbar-container"></div>
             <div class="entry-actions" onclick="event.stopPropagation()">

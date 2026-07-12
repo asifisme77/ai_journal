@@ -378,7 +378,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.35rem 0.6rem;
+    padding: 0.2rem 0.5rem;
     cursor: pointer;
     user-select: none;
     background: var(--task-header-background);
@@ -394,11 +394,27 @@ body {
 
 .toggle-icon {
     color: var(--text-muted);
-    transition: transform 0.3s ease;
 }
 
-.work-item.expanded .toggle-icon {
-    transform: rotate(180deg);
+.toggle-icon-expanded {
+    display: none !important;
+}
+.toggle-icon-collapsed {
+    display: inline-block !important;
+}
+/* Work item (task) toggles */
+.work-item.expanded .work-item-header .toggle-icon-expanded {
+    display: inline-block !important;
+}
+.work-item.expanded .work-item-header .toggle-icon-collapsed {
+    display: none !important;
+}
+/* Journal entry toggles */
+.journal-entry.expanded .entry-header .toggle-icon-expanded {
+    display: inline-block !important;
+}
+.journal-entry.expanded .entry-header .toggle-icon-collapsed {
+    display: none !important;
 }
 
 /* Drag Handle */
@@ -452,9 +468,9 @@ body {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-main);
     color: var(--text-main);
-    padding: 0.25rem 0.5rem;
+    padding: 0.15rem 0.35rem;
     border-radius: 6px;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     outline: none;
@@ -563,8 +579,8 @@ body {
     padding: 0.2rem 0 0 0;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-top: 0.25rem;
+    gap: 0.25rem;
+    margin-top: 0.15rem;
     border-left: 2px solid var(--border-main);
     padding-left: 0.5rem;
     margin-left: 0.3rem;
@@ -610,10 +626,10 @@ body {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    padding: 0.15rem 0.4rem;
+    padding: 0.1rem 0.35rem;
     background: var(--journal-header-background);
     border: none;
-    min-height: 38px;
+    min-height: 28px;
     flex-wrap: nowrap;
     overflow: visible;
 }
@@ -624,11 +640,12 @@ body {
 
 .entry-title-block {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     flex-shrink: 1;
     flex-grow: 1;
     min-width: 60px;
-    gap: 0px;
+    gap: 0.35rem;
     overflow: hidden;
 }
 
@@ -729,13 +746,8 @@ body {
 /* Entry Toggle & Collapse */
 .entry-toggle-icon {
     color: var(--text-muted);
-    transition: transform 0.3s ease;
     flex-shrink: 0;
     font-size: 0.9rem;
-}
-
-.journal-entry.expanded .entry-toggle-icon {
-    transform: rotate(180deg);
 }
 
 .entry-content {
@@ -763,8 +775,8 @@ body {
 }
 
 .btn-small {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.7rem;
 }
 
 .add-entry-row {
@@ -827,7 +839,7 @@ body {
     border: none;
     border-radius: 0;
     background: var(--editor-background);
-    padding: 8px 10px 8px 24px;
+    padding: 4px 8px 4px 20px;
     min-height: 20px;
     outline: none;
     color: var(--text-main);

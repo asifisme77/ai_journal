@@ -180,7 +180,7 @@ class TestFollowUpStatusMarkers:
         # Retrieve reminders/markers
         reminders = client.get('/api/markers/reminders').get_json()
         assert len(reminders) == 1
-        assert reminders[0]['text'] == 'Follow-up: Day 1 Notes'
+        assert reminders[0]['text'] == 'Day 1 Notes'
         assert reminders[0]['is_status_marker'] is True
         assert reminders[0]['is_archived'] is False
 
@@ -199,7 +199,7 @@ class TestFollowUpStatusMarkers:
         # Verify status marker is created
         reminders = client.get('/api/markers/reminders').get_json()
         assert len(reminders) == 1
-        assert reminders[0]['text'] == 'Follow-up: Notes'
+        assert reminders[0]['text'] == 'Notes'
         assert reminders[0]['is_status_marker'] is True
 
     def test_updating_status_from_followup_deletes_status_marker(self, client):
@@ -224,7 +224,7 @@ class TestFollowUpStatusMarkers:
 
         # Verify old title in marker
         reminders = client.get('/api/markers/reminders').get_json()
-        assert reminders[0]['text'] == 'Follow-up: Old Title'
+        assert reminders[0]['text'] == 'Old Title'
 
         # Update entry title
         res = client.put(f'/api/entries/{entry["id"]}', json={'title': 'New Title'})
@@ -233,7 +233,7 @@ class TestFollowUpStatusMarkers:
         # Verify status marker text is updated
         reminders = client.get('/api/markers/reminders').get_json()
         assert len(reminders) == 1
-        assert reminders[0]['text'] == 'Follow-up: New Title'
+        assert reminders[0]['text'] == 'New Title'
 
     def test_is_archived_context_in_reminders(self, client):
         item = client.post('/api/items', json={'heading': 'My Task'}).get_json()

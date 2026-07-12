@@ -504,7 +504,7 @@ def create_entry(item_id):
     if new_entry.status == 'FOLLOWUP':
         status_marker = Marker(
             entry_id=new_entry.id,
-            text=f"Follow-up: {new_entry.title}",
+            text=new_entry.title,
             state='OPEN',
             is_status_marker=True
         )
@@ -528,7 +528,7 @@ def update_entry(entry_id):
         # Keep status marker text in sync with new title
         status_marker = db.session.query(Marker).filter_by(entry_id=entry.id, is_status_marker=True).first()
         if status_marker:
-            status_marker.text = f"Follow-up: {entry.title}"
+            status_marker.text = entry.title
 
     if 'content' in data:
         entry.content = data['content']
@@ -543,7 +543,7 @@ def update_entry(entry_id):
             if not status_marker:
                 status_marker = Marker(
                     entry_id=entry.id,
-                    text=f"Follow-up: {entry.title}",
+                    text=entry.title,
                     state='OPEN',
                     is_status_marker=True
                 )
