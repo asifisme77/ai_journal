@@ -1436,6 +1436,114 @@ function createEntryElement(entry, isLast = false, initiallyExpanded = false, au
 }
 
 /**
+ * Checks whether the entry-header for a given entry has scrolled above the
+ * viewport.  If so, the toolbar is detached from its home position and
+ * placed as a fixed bar at the top of the screen.  A placeholder div is
+ * left behind so the header layout doesn't collapse.
+ */
+function _updateToolbarFloat(entryId) {
+    const toolbarEl = document.getElementById(`toolbar-${entryId}`);
+    if (!toolbarEl) return;
+
+    const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
+    if (!entryDiv) return;
+
+    const header = entryDiv.querySelector('.entry-header');
+    if (!header) return;
+
+    const headerRect = header.getBoundingClientRect();
+    const entryRect = entryDiv.getBoundingClientRect();
+
+    // Float when header bottom is above viewport AND the entry content
+    // is still partially visible (entry bottom is still in or below viewport)
+    const shouldFloat = headerRect.bottom < 0 && entryRect.bottom > 0;
+
+    if (shouldFloat) {
+        // Insert a placeholder to keep header layout stable
+        let placeholder = header.querySelector('.entry-toolbar-placeholder');
+        if (!placeholder) {
+            placeholder = document.createElement('div');
+            placeholder.className = 'entry-toolbar-placeholder';
+            // Insert placeholder right before toolbarEl
+            toolbarEl.insertAdjacentElement('beforebegin', placeholder);
+        }
+
+        // Clear any stale width styles before measuring natural size
+        if (!toolbarEl.classList.contains('toolbar-floating')) {
+            toolbarEl.style.width = '';
+            toolbarEl.style.minWidth = '';
+        }
+
+        // Measure original size before floating
+        const originalWidth = toolbarEl.classList.contains('toolbar-floating')
+            ? parseFloat(placeholder.style.width)
+            : toolbarEl.offsetWidth;
+        const originalHeight = toolbarEl.classList.contains('toolbar-floating')
+            ? parseFloat(placeholder.style.height)
+            : toolbarEl.offsetHeight;
+
+        placeholder.style.width = (originalWidth || 100) + 'px';
+        placeholder.style.height = (originalHeight || 28) + 'px';
+        placeholder.classList.add('active');
+
+        if (!toolbarEl.classList.contains('toolbar-floating')) {
+            // Move toolbarEl to document.body to escape parent container transforms/clipping
+            toolbarEl.classList.add('toolbar-floating');
+            document.body.appendChild(toolbarEl);
+        }
+
+        // Align horizontally and preserve the original toolbar width
+        const placeholderRect = placeholder.getBoundingClientRect();
+        toolbarEl.style.left = placeholderRect.left + 'px';
+        toolbarEl.style.minWidth = placeholderRect.width + 'px';
+        toolbarEl.style.width = 'auto';
+    } else if (!shouldFloat && toolbarEl.classList.contains('toolbar-floating')) {
+        _unfloatToolbar(toolbarEl);
+    }
+}
+
+/**
+ * Returns a floating toolbar to its home position inside the entry-header
+ * and removes the layout placeholder.
+ */
+function _unfloatToolbar(toolbarEl) {
+    const entryId = toolbarEl.id.replace('toolbar-', '');
+    
+    // Clear dynamic positioning styles
+    toolbarEl.style.left = '';
+    toolbarEl.style.width = '';
+    toolbarEl.style.minWidth = '';
+
+    const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entryId}"]`);
+    if (!entryDiv) {
+        toolbarEl.classList.remove('toolbar-floating');
+        return;
+    }
+    const header = entryDiv.querySelector('.entry-header');
+    if (!header) {
+        toolbarEl.classList.remove('toolbar-floating');
+        return;
+    }
+
+    toolbarEl.classList.remove('toolbar-floating');
+
+    const placeholder = header.querySelector('.entry-toolbar-placeholder');
+    if (placeholder) {
+        // Put the toolbar back exactly where the placeholder was
+        placeholder.insertAdjacentElement('beforebegin', toolbarEl);
+        placeholder.remove();
+    } else {
+        // Fallback: put it in the header before .entry-actions if possible
+        const entryActions = header.querySelector('.entry-actions');
+        if (entryActions) {
+            entryActions.insertAdjacentElement('beforebegin', toolbarEl);
+        } else {
+            header.appendChild(toolbarEl);
+        }
+    }
+}
+
+/**
  * Initializes a TinyMCE inline editor for a journal entry.
  * Configures: outliner, auto-save, custom toolbar buttons, click handlers,
  * table indentation, and keyboard shortcuts.
@@ -1512,8 +1620,9 @@ function initTinyMCE(entry, autoFocus = false) {
                         text = window.clipboardData.getData('Text');
                     }
                     if (text) {
-                        // Insert as plain text with line breaks preserved
-                        const safeText = escapeHtml(text).replace(/\r?\n/g, '<br>');
+                        // Normalize all line endings before inserting into PRE
+                        const normalizedText = text.replace(/\r\n|\r|\n/g, '\n');
+                        const safeText = escapeHtml(normalizedText).replace(/\n/g, '<br>');
                         editor.insertContent(safeText);
                     }
                 }
@@ -1526,13 +1635,21 @@ function initTinyMCE(entry, autoFocus = false) {
                 const sel = editor.selection;
                 if (sel.isCollapsed()) return;
 
+                const selectedBlocks = sel.getSelectedBlocks();
+                const isTableSelection = selectedBlocks.some(block => editor.dom.getParent(block, 'table'));
+
+                // Preserve native table copy behavior so Excel can receive proper table data.
+                if (isTableSelection) {
+                    return;
+                }
+
                 e.preventDefault();
 
                 // 1. Get raw HTML for rich-text paste scenarios
                 const richHtml = sel.getContent({ format: 'html' });
 
                 // 2. Temporarily inject spatial text nodes for plain-text extraction
-                const blocks = sel.getSelectedBlocks();
+                const blocks = selectedBlocks;
                 const injectedNodes = [];
                 const SPACES_PER_INDENT = 4;
 
@@ -1852,6 +1969,14 @@ function initTinyMCE(entry, autoFocus = false) {
                 const toolbarEl = document.getElementById(`toolbar-${entry.id}`);
                 if (toolbarEl) {
                     toolbarEl.classList.remove('toolbar-visible');
+                    // Un-float toolbar if it was floating
+                    _unfloatToolbar(toolbarEl);
+                }
+                // Remove scroll/resize listener for this entry
+                if (editor._floatScrollHandler) {
+                    window.removeEventListener('scroll', editor._floatScrollHandler);
+                    window.removeEventListener('resize', editor._floatScrollHandler);
+                    editor._floatScrollHandler = null;
                 }
                 const entryDiv = document.querySelector(`.journal-entry[data-entry-id="${entry.id}"]`);
                 if (entryDiv) {
@@ -1872,6 +1997,17 @@ function initTinyMCE(entry, autoFocus = false) {
                     entryDiv.classList.add('editing-active');
                     const workItem = entryDiv.closest('.work-item');
                     if (workItem) workItem.classList.add('task-editing-active');
+                }
+
+                // Set up scroll/resize-based floating toolbar
+                if (!editor._floatScrollHandler) {
+                    editor._floatScrollHandler = () => {
+                        _updateToolbarFloat(entry.id);
+                    };
+                    window.addEventListener('scroll', editor._floatScrollHandler, { passive: true });
+                    window.addEventListener('resize', editor._floatScrollHandler, { passive: true });
+                    // Check immediately in case already scrolled, scheduling after layout
+                    requestAnimationFrame(() => _updateToolbarFloat(entry.id));
                 }
             });
 
@@ -2939,10 +3075,16 @@ window.deleteEntry = async function (entryId) {
 
             // Clean up TinyMCE instance
             const editor = tinymce.get(`tinymce-${entryId}`);
+            // Clean up floating toolbar scroll/resize handler before removing editor
+            if (editor && editor._floatScrollHandler) {
+                window.removeEventListener('scroll', editor._floatScrollHandler);
+                window.removeEventListener('resize', editor._floatScrollHandler);
+                editor._floatScrollHandler = null;
+            }
             if (editor) editor.remove();
 
-            // Safety: remove any orphaned toolbar that might be on document.body
-            const orphanedToolbar = document.body.querySelector(`#toolbar-${entryId}.floating-toolbar`);
+            // Safety: remove any orphaned toolbar that might be floating
+            const orphanedToolbar = document.body.querySelector(`#toolbar-${entryId}.toolbar-floating`);
             if (orphanedToolbar) orphanedToolbar.remove();
         }
     } catch (error) {

@@ -112,6 +112,44 @@ def test_standard_pre_escape(flask_server, page: Page):
     assert p_count == 1, "A paragraph should have been created below the pre block"
 
 
+def test_preformatted_paste_normalizes_mac_line_endings(flask_server, page: Page):
+    """Verifies that pasted text with Mac-style CR line endings into a PRE block preserves only one break per line."""
+    page.goto(flask_server)
+
+    editor_locator = page.locator('div#tinymce-1')
+    editor_locator.wait_for(state='visible')
+    editor_locator.click(force=True)
+
+    page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.setContent('<pre></pre>');
+        const pre = editor.dom.select('pre')[0];
+        editor.selection.setCursorLocation(pre, 0);
+        const pasteEvent = {
+            type: 'paste',
+            clipboardData: {
+                getData: () => 'Line1\\rLine2\\rLine3'
+            },
+            preventDefault: () => { pasteEvent.defaultPrevented = true; },
+            defaultPrevented: false,
+            isDefaultPrevented: () => pasteEvent.defaultPrevented,
+            isPropagationStopped: () => false,
+            isImmediatePropagationStopped: () => false,
+            stopPropagation: () => {},
+            stopImmediatePropagation: () => {},
+        };
+        editor.fire('paste', pasteEvent);
+    }''')
+
+    time.sleep(0.5)
+
+    pre_inner_html = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        return editor.dom.select('pre')[0].innerHTML;
+    }''')
+    assert pre_inner_html == 'Line1<br>Line2<br>Line3', "Mac-style CR line endings should be normalized to single breaks in PRE paste"
+
+
 def test_pasted_pre_escape(flask_server, page: Page):
     """Verifies that pressing ArrowDown in a pre block with trailing newlines escapes it."""
     page.goto(flask_server)
@@ -152,5 +190,43 @@ def test_pasted_pre_escape(flask_server, page: Page):
         return editor.dom.select('p').length;
     }''')
     assert p_count == 1, "A paragraph should have been created below the pre block"
+
+
+def test_table_copy_uses_native_clipboard(flask_server, page: Page):
+    """Verifies that table copy does not use the custom copy override."""
+    page.goto(flask_server)
+
+    editor_locator = page.locator('div#tinymce-1')
+    editor_locator.wait_for(state='visible')
+    editor_locator.click(force=True)
+
+    result = page.evaluate('''() => {
+        const editor = tinymce.get('tinymce-1');
+        editor.setContent('<table><tbody><tr><td>Cell A</td><td>Cell B</td></tr></tbody></table>');
+        const td = editor.dom.select('td')[0];
+        editor.selection.select(td);
+
+        const copyEvent = {
+            type: 'copy',
+            clipboardData: {
+                data: {},
+                setData(type, value) { this.data[type] = value; },
+                getData(type) { return this.data[type]; }
+            },
+            preventDefault() { this.defaultPrevented = true; },
+            defaultPrevented: false,
+            isDefaultPrevented() { return this.defaultPrevented; },
+            isPropagationStopped() { return false; },
+            isImmediatePropagationStopped() { return false; },
+            stopPropagation() {},
+            stopImmediatePropagation() {}
+        };
+
+        editor.fire('copy', copyEvent);
+        return { prevented: copyEvent.defaultPrevented, clipboardData: copyEvent.clipboardData.data };
+    }''')
+
+    assert result['prevented'] is False
+    assert result['clipboardData'] == {}
 
 

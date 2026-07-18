@@ -337,16 +337,16 @@ body {
 .items-list {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.15rem;
 }
 
 .work-item {
     background: var(--panel-background);
     border: 1px solid var(--border-main);
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: visible;
-    transition: all 0.3s ease;
-    animation: slideIn 0.3s ease forwards;
+    transition: all 0.25s ease;
+    animation: slideIn 0.25s ease forwards;
     position: relative;
     z-index: 1;
 }
@@ -354,7 +354,7 @@ body {
 .work-item:focus-within {
     z-index: 100;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 @keyframes slideIn {
@@ -378,11 +378,29 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.2rem 0.5rem;
+    padding: 0.12rem 0.3rem;
     cursor: pointer;
     user-select: none;
     background: var(--task-header-background);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    position: relative;
+}
+
+.work-item-header::after {
+    content: '';
+    position: absolute;
+    left: 1.1rem;
+    top: 100%;
+    width: 0;
+    height: 0.75rem;
+    border-left: 2px solid rgba(148, 163, 184, 0.4);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 1;
+}
+
+.work-item.expanded .work-item-header::after {
+    opacity: 1;
 }
 
 .work-item-title-group {
@@ -539,12 +557,12 @@ body {
 
 .content-inner {
     overflow: hidden;
-    padding: 0 0.4rem;
+    padding: 0 0.3rem;
     border-top: 1px solid transparent;
 }
 
 .work-item.expanded .content-inner {
-    padding: 0.4rem 0.6rem;
+    padding: 0.3rem 0.5rem;
     border-top-color: var(--border-main);
     overflow: visible;
 }
@@ -554,12 +572,12 @@ body {
     background: rgba(0, 0, 0, 0.1);
     border: 1px solid var(--border-main);
     border-radius: 8px;
-    padding: 0.75rem;
+    padding: 0.65rem;
     color: var(--text-main);
     font-family: inherit;
     resize: vertical;
     min-height: 100px;
-    margin-bottom: 1rem;
+    margin-bottom: 0.8rem;
     outline: none;
     transition: border-color 0.2s;
 }
@@ -576,26 +594,33 @@ body {
 
 /* Journal Entries */
 .entries-container {
-    padding: 0.2rem 0 0 0;
+    padding: 0.08rem 0 0 0;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    margin-top: 0.15rem;
-    border-left: 2px solid var(--border-main);
-    padding-left: 0.5rem;
-    margin-left: 0.3rem;
+    gap: 0.18rem;
+    margin-top: 0.08rem;
+    margin-left: 1.25rem;
+    position: relative;
+}
+
+.entries-container::before {
+    display: none;
 }
 
 .journal-entry {
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.05);
     padding: 0;
-    margin-left: 0.5rem;
+    margin-left: 0;
     position: relative;
     min-width: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     transition: all 0.2s;
-    overflow: hidden;
+    overflow: visible;
+}
+
+.journal-entry:focus-within {
+    border-radius: 6px;
 }
 
 .journal-entry.expanded {
@@ -611,31 +636,53 @@ body {
     background: var(--active-journal-bg);
 }
 
-/* Add a subtle connecting line to show hierarchy */
+/* Add a connecting tick line for each entry */
 .journal-entry::before {
     content: '';
     position: absolute;
-    left: -0.9rem;
-    top: 0.5rem;
-    width: 0.75rem;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.2);
+    left: -0.65rem;
+    top: -4px;
+    width: 0.7rem;
+    height: calc(0.9rem + 4px);
+    border-left: 2px solid rgba(148, 163, 184, 0.4);
+    border-bottom: 2px solid rgba(148, 163, 184, 0.4);
+    border-bottom-left-radius: 8px;
+    box-sizing: border-box;
+    opacity: 1;
+    z-index: 1;
+}
+
+/* Continuous vertical connector line for non-last children */
+.journal-entry:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: -0.65rem;
+    top: 0.88rem; /* start slightly above the elbow to prevent subpixel gaps */
+    width: 0;
+    height: calc(100% - 0.88rem + 0.18rem + 4px); /* go down to next sibling's top + 4px overlap */
+    border-left: 2px solid rgba(148, 163, 184, 0.4);
+    z-index: 1;
 }
 
 .entry-header {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.1rem 0.35rem;
+    gap: 0.18rem;
+    padding: 0.06rem 0.25rem;
     background: var(--journal-header-background);
     border: none;
-    min-height: 28px;
+    min-height: 26px;
     flex-wrap: nowrap;
     overflow: visible;
+    border-radius: 5px;
 }
 
 .journal-entry.expanded .entry-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
 }
 
 .entry-title-block {
@@ -645,7 +692,7 @@ body {
     flex-shrink: 1;
     flex-grow: 1;
     min-width: 60px;
-    gap: 0.35rem;
+    gap: 0.25rem;
     overflow: hidden;
 }
 
@@ -653,9 +700,9 @@ body {
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-muted);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 500;
-    padding: 0.1rem 0.3rem;
+    padding: 0.08rem 0.25rem;
     border-radius: 4px;
     width: 100%;
     margin-right: 0;
@@ -681,7 +728,7 @@ body {
 .entry-actions {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.15rem;
     flex-shrink: 0;
     margin-left: auto;
 }
@@ -767,11 +814,15 @@ body {
     overflow: hidden;
     padding: 0;
     min-width: 0;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
 }
 
 .journal-entry.expanded .entry-content-inner {
     padding: 0;
     overflow: visible;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
 }
 
 .btn-small {
@@ -833,11 +884,68 @@ body {
     }
 }
 
+/* Floating toolbar: fixed to viewport top when header scrolls out of view */
+.entry-toolbar-container.toolbar-floating {
+    position: fixed;
+    top: 0; /* will be overridden by JS to match original header Y offset */
+    z-index: 9999;
+    display: flex !important;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    background: var(--toolbar-background);
+    border: 1px solid var(--border-main);
+    border-top: none;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    padding: 2px 8px;
+    box-sizing: border-box;
+    width: auto;
+    max-width: calc(100vw - 16px);
+    overflow: visible;
+    animation: toolbarSlideDown 0.18s ease-out;
+    justify-content: flex-start;
+}
+
+.entry-toolbar-container.toolbar-floating .tox-tinymce-inline,
+.entry-toolbar-container.toolbar-floating .tox-editor-header,
+.entry-toolbar-container.toolbar-floating .tox-toolbar {
+    overflow: visible !important;
+}
+
+.tox .tox-collection,
+.tox .tox-menu,
+.tox .tox-silver-sink {
+    z-index: 10000 !important;
+}
+
+/* Placeholder keeps layout stable when toolbarEl.style.left = placeholderRect.left + 'px';
+toolbarEl.style.width = placeholderRect.width + 'px';
+toolbarEl.style.top = placeholderRect.top + 'px';  display: none; */
+.entry-toolbar-placeholder {
+    display: none;
+}
+
+.entry-toolbar-placeholder.active {
+    display: block;
+}
+
+@keyframes toolbarSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* ----- Inline TinyMCE Editor Styling ----- */
 .tinymce-editor {
     font-family: 'Lexend', sans-serif;
     border: none;
-    border-radius: 0;
+    border-radius: 0 0 6px 6px;
     background: var(--editor-background);
     padding: 4px 8px 4px 20px;
     min-height: 20px;
@@ -1161,12 +1269,12 @@ a.embedded-file:hover {
 details.timeline-year,
 details.timeline-month,
 details.timeline-date {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     width: 100%;
 }
 
 details.timeline-month {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
 }
 
 .sidebar details>summary {
@@ -1175,7 +1283,7 @@ details.timeline-month {
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem;
 }
 
 .sidebar details>summary::-webkit-details-marker {
@@ -1212,9 +1320,9 @@ details.timeline-month>summary {
 
 .timeline-month-content {
     margin-left: 0.8rem;
-    border-left: 1px dashed rgba(255, 255, 255, 0.1);
-    padding-left: 0.75rem;
-    margin-top: 0.5rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    padding-left: 0.5rem;
+    margin-top: 0.25rem;
 }
 
 details.timeline-date>summary {
@@ -1226,15 +1334,15 @@ details.timeline-date>summary {
 }
 
 .timeline-date-content {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
 }
 
 .timeline-item {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--border-main);
     border-radius: 6px;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.25rem;
     cursor: pointer;
     transition: all 0.2s;
     border-left: 3px solid transparent;
@@ -1269,7 +1377,7 @@ details.timeline-date>summary {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1321,7 +1429,7 @@ details.timeline-date>summary {
     margin-bottom: 1rem;
     font-size: 1.2rem;
     color: var(--text-muted);
-    border-bottom: 1px dashed var(--border-main);
+    border-bottom: 1px solid var(--border-main);
     padding-bottom: 0.5rem;
     display: none;
     align-items: center;
@@ -1356,6 +1464,7 @@ details.timeline-date>summary {
     display: flex;
     align-items: center;
     flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
 }
 
 .entry-toolbar-container .tox-toolbar__group {
@@ -1503,9 +1612,9 @@ details.timeline-date>summary {
 
 /* Timeline Markers */
 .timeline-markers {
-    margin-top: 0.4rem;
+    margin-top: 0.25rem;
     margin-left: 0.5rem;
-    border-left: 1px dashed rgba(255, 255, 255, 0.2);
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
     padding-left: 0.5rem;
 }
 
@@ -1519,8 +1628,8 @@ details.timeline-date>summary {
 .timeline-marker-item {
     display: flex;
     align-items: flex-start;
-    gap: 0.4rem;
-    padding: 0.25rem;
+    gap: 0.35rem;
+    padding: 0.15rem 0.25rem;
     cursor: pointer;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -1534,11 +1643,11 @@ details.timeline-date>summary {
 }
 
 .timeline-marker-bubble {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     background-color: #facc15;
     border-radius: 50%;
-    margin-top: 0.15rem;
+    margin-top: 0.1rem;
     flex-shrink: 0;
 }
 
