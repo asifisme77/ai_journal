@@ -33,10 +33,11 @@ def flask_app():
     with app.app_context():
         db.create_all()
         # Create the FTS5 virtual table (not created by SQLAlchemy's create_all)
-        from app import FTS_CREATE
+        from app import FTS_CREATE, create_system_folders
         with db.engine.connect() as conn:
             conn.execute(text(FTS_CREATE))
             conn.commit()
+        create_system_folders()
         yield app
         db.session.remove()
         db.drop_all()
@@ -73,8 +74,9 @@ def flask_server():
 
     with app.app_context():
         db.create_all()
+        from app import WorkItem, JournalEntry, create_system_folders
+        create_system_folders()
         # Create a default test item and entry for browser tests
-        from app import WorkItem, JournalEntry
         item = WorkItem(heading="Test Work Item")
         db.session.add(item)
         db.session.commit()

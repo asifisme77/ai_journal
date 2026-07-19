@@ -9,9 +9,9 @@
 :root[data-theme="light"] {
     /* Catppuccin Latte Color Scheme */
     --app-background: #eff1f5;
-    --panel-background: rgba(255, 255, 255, 0.7);
+    --panel-background: #ffffff;
     --panel-hover-background: #e6e9ef;
-    --border-main: #ccd0da;
+    --border-main: #b8bec9;
 
     --text-main: #4c4f69;
     --text-muted: #6c6f85;
@@ -48,9 +48,9 @@
 ============================ */
 :root {
     --app-background: #0d1117;
-    --panel-background: rgba(30, 41, 59, 0.7);
+    --panel-background: #1e293b;
     --panel-hover-background: rgba(51, 65, 85, 0.8);
-    --border-main: rgba(255, 255, 255, 0.1);
+    --border-main: #334155;
 
     --text-main: #f8fafc;
     --text-muted: #94a3b8;

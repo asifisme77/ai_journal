@@ -342,7 +342,7 @@ body {
 
 .work-item {
     background: var(--panel-background);
-    border: 1px solid var(--border-main);
+    border: 1.5px solid var(--border-main);
     border-radius: 10px;
     overflow: visible;
     transition: all 0.25s ease;
@@ -392,7 +392,7 @@ body {
     left: 1.1rem;
     top: 100%;
     width: 0;
-    height: 0.75rem;
+    height: 0.35rem;
     border-left: 2px solid rgba(148, 163, 184, 0.4);
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -408,6 +408,8 @@ body {
     align-items: center;
     gap: 0.5rem;
     flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .toggle-icon {
@@ -562,7 +564,7 @@ body {
 }
 
 .work-item.expanded .content-inner {
-    padding: 0.3rem 0.5rem;
+    padding: 0.15rem 0.5rem;
     border-top-color: var(--border-main);
     overflow: visible;
 }
@@ -589,7 +591,9 @@ body {
 .item-actions {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 /* Journal Entries */
@@ -733,6 +737,33 @@ body {
     margin-left: auto;
 }
 
+.item-title-wrapper {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.item-title-text {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    cursor: text;
+    padding: 0.1rem 0.25rem;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.item-title-text:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+}
+
 .item-title-input {
     background: transparent;
     border: 1px solid transparent;
@@ -769,16 +800,20 @@ body {
 .work-item-folder-path {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.6rem;
-    color: rgba(148, 163, 184, 0.6);
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-main);
+    border-radius: 6px;
+    padding: 0.15rem 0.4rem;
+    margin-right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
+    max-width: 150px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding-left: 0.4rem;
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .entry-date {
@@ -1739,6 +1774,7 @@ details.timeline-date>summary {
 
 /* --- SIDEBAR RESIZER --- */
 .sidebar-resizer {
+    position: relative;
     width: 12px;
     margin: 0 -3px;
     /* Slightly overlap for better hit area */
@@ -1801,11 +1837,78 @@ details.timeline-date>summary {
     margin-top: 0.5rem;
 }
 
-.memo-folder {
+.folder-system-root {
+    margin-bottom: 0.5rem;
+}
+
+.folder-root-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.5rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+    user-select: none;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.folder-root-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.folder-root-caret {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.folder-system-root.collapsed .folder-root-caret {
+    transform: rotate(-90deg);
+}
+
+.folder-system-root.collapsed .folder-root-content {
+    display: none;
+}
+
+.folder-root-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.folder-root-actions {
+    display: none;
+    gap: 0.3rem;
+    margin-left: auto;
+}
+
+.folder-root-header:hover .folder-root-actions {
+    display: flex;
+}
+
+/* Accent colors via CSS custom properties */
+.folder-root-memo { --folder-accent: #3b82f6; }
+.folder-root-task { --folder-accent: #10b981; }
+
+.folder-root-icon {
+    font-size: 1.1rem;
+    color: var(--folder-accent);
+}
+
+.folder-root-name {
+    color: var(--text-main);
+}
+
+.folder {
     margin-bottom: 0.4rem;
 }
 
-.memo-folder-header {
+.folder.folder-dragging {
+    opacity: 0.45;
+}
+
+.folder-header {
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -1816,26 +1919,26 @@ details.timeline-date>summary {
     user-select: none;
 }
 
-.memo-folder-header:hover {
+.folder-header:hover {
     background: rgba(255, 255, 255, 0.05);
 }
 
-.memo-folder-caret {
+.folder-caret {
     font-size: 0.8rem;
     color: var(--text-muted);
     transition: transform 0.2s;
 }
 
-.memo-folder.collapsed .memo-folder-caret {
+.folder.collapsed .folder-caret {
     transform: rotate(-90deg);
 }
 
-.memo-folder-icon {
+.folder-icon {
     font-size: 1rem;
-    color: #3b82f6;
+    color: var(--folder-accent);
 }
 
-.memo-folder-name {
+.folder-name {
     flex-grow: 1;
     font-weight: 600;
     font-size: 0.8rem;
@@ -1845,18 +1948,18 @@ details.timeline-date>summary {
     text-overflow: ellipsis;
 }
 
-.memo-folder-actions {
+.folder-actions {
     display: none;
     gap: 0.3rem;
     margin-left: auto;
 }
 
-.memo-folder-header:hover .memo-folder-actions {
+.folder-header:hover .folder-actions {
     display: flex;
 }
 
-.memo-folder-add-sub-btn,
-.memo-folder-delete-btn {
+.folder-add-sub-btn,
+.folder-delete-btn {
     background: transparent;
     border: none;
     color: var(--text-muted);
@@ -1869,62 +1972,67 @@ details.timeline-date>summary {
     align-items: center;
 }
 
-.memo-folder-add-sub-btn:hover {
-    color: var(--accent-primary);
-    background: rgba(59, 130, 246, 0.1);
+.folder-add-sub-btn:hover {
+    color: var(--folder-accent);
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.memo-folder-delete-btn:hover {
+.folder-delete-btn:hover {
     color: var(--accent-danger);
     background: rgba(239, 68, 68, 0.1);
 }
 
-.memo-folder-content {
+.folder-content {
     display: flex;
     flex-direction: column;
 }
 
-.memo-folder.collapsed .memo-folder-content {
+.folder.collapsed .folder-content {
     display: none;
 }
 
-.memo-folder-children {
+.folder-children {
     padding-left: 0.8rem;
     border-left: 1px solid rgba(255, 255, 255, 0.05);
     margin-left: 0.4rem;
 }
 
-.memo-folder-items {
+.folder-items {
     display: flex;
     flex-direction: column;
     gap: 1px;
     padding-left: 0.8rem;
 }
 
-.memo-item {
+.folder-item {
+    cursor: pointer;
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     transition: background 0.2s;
+    min-width: 0;
+    width: 100%;
 }
 
-.memo-item:hover {
+.folder-item:hover {
     background: rgba(255, 255, 255, 0.05);
 }
 
-.memo-item-inner {
+.folder-item-inner {
     display: flex;
     align-items: flex-start;
     gap: 0.4rem;
+    min-width: 0;
+    width: 100%;
 }
 
-.memo-item-icon {
+.folder-item-icon {
     font-size: 0.75rem;
     color: var(--text-muted);
     flex-shrink: 0;
     margin-top: 2px;
 }
 
-.memo-item-body {
+.folder-item-body {
     flex-grow: 1;
     min-width: 0;
     display: flex;
@@ -1932,21 +2040,32 @@ details.timeline-date>summary {
     gap: 1px;
 }
 
-.memo-item-title {
+.folder-item-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.folder-item-title {
     font-size: 0.72rem;
     color: var(--text-muted);
     cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-grow: 1;
+    min-width: 0;
 }
 
-.memo-item-title:hover {
+.folder-item-title:hover {
     color: var(--text-main);
     text-decoration: underline;
 }
 
-.memo-item-meta {
+.folder-item-meta {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -1956,7 +2075,7 @@ details.timeline-date>summary {
     min-width: 0;
 }
 
-.memo-item-date {
+.folder-item-date {
     white-space: nowrap;
     flex-shrink: 0;
     display: inline-flex;
@@ -1964,7 +2083,7 @@ details.timeline-date>summary {
     gap: 2px;
 }
 
-.memo-item-path {
+.folder-item-path {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.55rem;
     letter-spacing: -0.02em;
@@ -1979,7 +2098,7 @@ details.timeline-date>summary {
 }
 
 /* Drag Handle */
-.memo-drag-handle {
+.folder-drag-handle {
     font-size: 0.75rem;
     color: rgba(148, 163, 184, 0.3);
     cursor: grab;
@@ -1987,39 +2106,39 @@ details.timeline-date>summary {
     transition: color 0.2s;
 }
 
-.memo-item:hover .memo-drag-handle {
+.folder-item:hover .folder-drag-handle {
     color: rgba(148, 163, 184, 0.7);
 }
 
-.memo-drag-handle:active {
+.folder-drag-handle:active {
     cursor: grabbing;
 }
 
 /* Dragging State */
-.memo-item-dragging {
+.folder-item-dragging {
     opacity: 0.4;
-    background: rgba(59, 130, 246, 0.1);
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
 }
 
 /* Drop Target Hint (shown on all folders while dragging) */
-.memo-drop-hint {
-    outline: 1px dashed rgba(59, 130, 246, 0.3);
+.folder-drop-hint {
+    outline: 1px dashed var(--folder-accent);
     outline-offset: -1px;
     border-radius: 4px;
 }
 
 /* Active Drop Target (when hovering over a folder) */
-.memo-drop-target {
-    background: rgba(59, 130, 246, 0.15) !important;
-    outline: 2px solid rgba(59, 130, 246, 0.6) !important;
+.folder-drop-target {
+    background: rgba(255, 255, 255, 0.05) !important;
+    outline: 2px solid var(--folder-accent) !important;
     outline-offset: -2px;
     border-radius: 4px;
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.05);
 }
 
-.memo-drop-target .memo-folder-icon {
-    color: #60a5fa !important;
+.folder-drop-target .folder-icon,
+.folder-drop-target .folder-root-icon {
     animation: folder-pulse 0.6s ease-in-out infinite alternate;
 }
 
@@ -2027,69 +2146,83 @@ details.timeline-date>summary {
     from {
         transform: scale(1);
     }
-
     to {
         transform: scale(1.15);
     }
 }
 
-/* Root drop zone hint */
-.memo-drop-hint-root {
-    position: relative;
-}
-
-.memo-drop-hint-root::after {
-    content: 'Drop here for root level';
-    display: block;
-    text-align: center;
-    font-size: 0.65rem;
-    color: rgba(59, 130, 246, 0.6);
-    border: 1px dashed rgba(59, 130, 246, 0.3);
-    border-radius: 4px;
-    padding: 0.4rem;
-    margin-top: 0.4rem;
-    pointer-events: none;
-}
-
-.memo-root-drop-target {
-    background: rgba(59, 130, 246, 0.05);
-    border-radius: 4px;
-}
-
-.memo-root-drop-target::after {
-    border-color: rgba(59, 130, 246, 0.6) !important;
-    color: rgba(59, 130, 246, 0.9) !important;
-    background: rgba(59, 130, 246, 0.08);
-}
-
-.memo-empty-folder {
+.folder-empty-folder {
     font-size: 0.7rem;
     color: var(--text-muted);
     font-style: italic;
     padding: 0.2rem 0.5rem;
 }
 
-.memo-add-folder-btn {
+.folder-add-btn {
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
     padding: 2px;
-    font-size: 1rem;
+    font-size: 0.95rem;
     border-radius: 4px;
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
-    margin-left: 0.5rem;
 }
 
-.memo-add-folder-btn:hover {
+.folder-add-btn:hover {
     color: var(--text-main);
     background: rgba(255, 255, 255, 0.05);
 }
 
-.memo-new-folder-row {
+.folder-filter-toggle {
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-main);
+    border-radius: 12px;
+    padding: 2px;
+    gap: 1px;
+    margin-left: auto;
+    align-items: center;
+}
+
+.filter-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 9px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.filter-btn:hover {
+    color: var(--text-main);
+}
+
+.filter-btn.active[data-filter="all"] {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+}
+
+.filter-btn.active[data-filter="memos"] {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.filter-btn.active[data-filter="tasks"] {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.folder-new-row {
     display: flex;
     align-items: center;
     gap: 0.3rem;
@@ -2098,7 +2231,7 @@ details.timeline-date>summary {
     border-bottom: 1px solid var(--border-main);
 }
 
-.memo-folder-input {
+.folder-input {
     flex-grow: 1;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-main);
@@ -2109,39 +2242,52 @@ details.timeline-date>summary {
     outline: none;
 }
 
-.memo-folder-input-error {
+.folder-input-error {
     border-color: var(--accent-danger) !important;
     animation: shake 0.3s ease-in-out;
     color: var(--accent-danger) !important;
 }
 
-.memo-folder-input-error::placeholder {
+.folder-input-error::placeholder {
     color: var(--accent-danger);
     opacity: 0.8;
 }
 
 @keyframes shake {
-
-    0%,
-    100% {
+    0%, 100% {
         transform: translateX(0);
     }
-
     20% {
         transform: translateX(-4px);
     }
-
     40% {
         transform: translateX(4px);
     }
-
     60% {
         transform: translateX(-3px);
     }
-
     80% {
         transform: translateX(3px);
     }
+}
+
+.folder-item-state {
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.folder-item-state-todo {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.folder-item-state-wip {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
 }
 
 .hidden {

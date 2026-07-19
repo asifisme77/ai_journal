@@ -83,7 +83,7 @@ class WorkItem(db.Model):
     state = db.Column(db.String(20), default='TODO')
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    memo_folder_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id'), nullable=True)
+    folder_id = db.Column('memo_folder_id', db.Integer, db.ForeignKey('memo_folder.id'), nullable=True)
     entries = db.relationship('JournalEntry', backref='work_item', cascade='all, delete-orphan')
 
     def to_dict(self, exclude_content=False):
@@ -93,7 +93,8 @@ class WorkItem(db.Model):
             'state': self.state,
             'sort_order': self.sort_order,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'memo_folder_id': self.memo_folder_id,
+            'folder_id': self.folder_id,
+            'memo_folder_id': self.folder_id,  # for backward compatibility
             'entries': [entry.to_dict(exclude_content=exclude_content) for entry in sorted(self.entries, key=lambda e: e.created_at.isoformat() if e.created_at else "")]
         }
 
@@ -144,13 +145,15 @@ class Marker(db.Model):
         }
 
 class MemoFolder(db.Model):
-    """A named folder for organizing MEMO work items in the sidebar."""
+    """A named folder for organizing work items in the sidebar.
+    System root folders ('Memos', 'Tasks') partition items by type."""
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     parent_id = db.Column(db.Integer, db.ForeignKey('memo_folder.id', ondelete='CASCADE'), nullable=True)
+    is_system = db.Column(db.Boolean, default=False, nullable=False)
     
-    items = db.relationship('WorkItem', backref='folder', lazy=True)
+    items = db.relationship('WorkItem', backref='folder', lazy=True, foreign_keys='WorkItem.folder_id')
     children = db.relationship('MemoFolder', backref=db.backref('parent', remote_side=[id]), lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
@@ -158,8 +161,19 @@ class MemoFolder(db.Model):
             'id': self.id,
             'name': self.name,
             'parent_id': self.parent_id,
-            'created_at': self.created_at.isoformat()
+            'is_system': self.is_system,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+def create_system_folders():
+    """Ensure the system root folders exist in the database."""
+    for root_name in ['Memos', 'Tasks']:
+        exists = MemoFolder.query.filter_by(name=root_name, parent_id=None, is_system=True).first()
+        if not exists:
+            root = MemoFolder(name=root_name, parent_id=None, is_system=True)
+            db.session.add(root)
+    db.session.commit()
 
 
 # ============================================================================
@@ -273,6 +287,44 @@ with app.app_context():
         except Exception as e:
             print(f"Error during sort_order migration: {e}")
 
+        # Auto-migration: is_system column on memo_folder
+        try:
+            inspector = inspect(db.engine)
+            if 'memo_folder' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('memo_folder')]
+                if 'is_system' not in columns:
+                    _conn.execute(text('ALTER TABLE memo_folder ADD COLUMN is_system BOOLEAN DEFAULT 0 NOT NULL'))
+        except Exception as e:
+            print(f"Error during is_system migration: {e}")
+
+        # Ensure system root folders exist
+        try:
+            for root_name in ['Memos', 'Tasks']:
+                exists = _conn.execute(
+                    text("SELECT id FROM memo_folder WHERE name = :name AND parent_id IS NULL AND is_system = 1"),
+                    {'name': root_name}
+                ).fetchone()
+                if not exists:
+                    _conn.execute(
+                        text("INSERT INTO memo_folder (name, parent_id, is_system) VALUES (:name, NULL, 1)"),
+                        {'name': root_name}
+                    )
+        except Exception as e:
+            print(f"Error creating system root folders: {e}")
+
+        # Re-parent any orphaned top-level user folders under Memos root (backward compat)
+        try:
+            memos_root = _conn.execute(
+                text("SELECT id FROM memo_folder WHERE name = 'Memos' AND is_system = 1")
+            ).fetchone()
+            if memos_root:
+                _conn.execute(
+                    text("UPDATE memo_folder SET parent_id = :root_id WHERE parent_id IS NULL AND is_system = 0"),
+                    {'root_id': memos_root[0]}
+                )
+        except Exception as e:
+            print(f"Error re-parenting folders: {e}")
+
         # Backfill FTS index on startup (idempotent — deletes first)
         try:
             _conn.execute(text("DELETE FROM search_index"))
@@ -376,11 +428,20 @@ def update_item(item_id):
     if 'heading' in data:
         item.heading = data['heading']
     if 'state' in data:
-        item.state = data['state']
-    if 'memo_folder_id' in data:
-        folder_id = data['memo_folder_id']
+        old_state = item.state
+        new_state = data['state']
+        item.state = new_state
+        # Clear folder assignment on type-boundary state changes
+        if item.folder_id is not None:
+            is_memo_to_task = (old_state == 'MEMO' and new_state in ('TODO', 'WIP'))
+            is_task_to_memo = (old_state in ('TODO', 'WIP') and new_state == 'MEMO')
+            if is_memo_to_task or is_task_to_memo:
+                item.folder_id = None
+
+    if 'folder_id' in data or 'memo_folder_id' in data:
+        folder_id = data.get('folder_id') if 'folder_id' in data else data.get('memo_folder_id')
         if folder_id is None or db.session.get(MemoFolder, folder_id):
-            item.memo_folder_id = folder_id
+            item.folder_id = folder_id
 
     db.session.commit()
     with db.engine.connect() as conn:
@@ -420,65 +481,162 @@ def reorder_items():
 
 
 # ============================================================================
-# ROUTES: Memo Folders
+# ROUTES: Folders
 # ============================================================================
 
+@app.route('/api/folders', methods=['GET'])
 @app.route('/api/memo-folders', methods=['GET'])
-def get_memo_folders():
-    """List all memo folders in a hierarchical structure with their items."""
-    def build_tree(parent_id=None):
-        folders = db.session.query(MemoFolder).filter_by(parent_id=parent_id).order_by(MemoFolder.created_at.asc()).all()
+def get_folders():
+    """List all folders in a hierarchical structure with their items."""
+    def build_tree(parent_id=None, allowed_states=None):
+        folders = db.session.query(MemoFolder).filter_by(parent_id=parent_id) \
+            .order_by(MemoFolder.is_system.desc(), MemoFolder.created_at.asc()).all()
         result = []
         for folder in folders:
             f = folder.to_dict()
-            f['items'] = [item.to_dict() for item in folder.items if item.state == 'MEMO']
-            f['children'] = build_tree(folder.id)
+            current_allowed = allowed_states
+            if folder.is_system:
+                if folder.name == 'Memos':
+                    current_allowed = ('MEMO',)
+                elif folder.name == 'Tasks':
+                    current_allowed = ('TODO', 'WIP')
+
+            if current_allowed:
+                f['items'] = [item.to_dict() for item in folder.items if item.state in current_allowed]
+            else:
+                f['items'] = [item.to_dict() for item in folder.items]
+
+            if folder.is_system and folder.name == 'Memos':
+                f['root_items'] = [item.to_dict() for item in
+                    db.session.query(WorkItem).filter_by(state='MEMO', folder_id=None)
+                    .order_by(WorkItem.created_at.desc()).all()]
+            elif folder.is_system and folder.name == 'Tasks':
+                f['root_items'] = [item.to_dict() for item in
+                    db.session.query(WorkItem).filter(
+                        WorkItem.state.in_(['TODO', 'WIP']),
+                        WorkItem.folder_id == None
+                    ).order_by(WorkItem.sort_order.asc()).all()]
+            else:
+                f['root_items'] = []
+            f['children'] = build_tree(folder.id, current_allowed)
             result.append(f)
         return result
 
-    # Root-level items (memos with no folder)
-    root_memos = db.session.query(WorkItem).filter_by(state='MEMO', memo_folder_id=None).order_by(WorkItem.created_at.desc()).all()
-    
-    return jsonify({
-        'folders': build_tree(None),
-        'root_memos': [item.to_dict() for item in root_memos]
-    })
+    return jsonify({'folders': build_tree(None)})
 
 
+@app.route('/api/folders', methods=['POST'])
 @app.route('/api/memo-folders', methods=['POST'])
-def create_memo_folder():
-    """Create a new memo folder, optionally under a parent folder."""
+def create_folder():
+    """Create a new folder under a parent. Cannot create system roots."""
     data = request.json
     name = (data.get('name') or '').strip()
     parent_id = data.get('parent_id')
-    
+
     if not name:
         return jsonify({'error': 'Folder name is required'}), 400
-    
-    # Enforce unique folder names within the same parent (case-insensitive)
+    if not parent_id:
+        # Default to 'Memos' system root for backward compatibility
+        memos_root = db.session.query(MemoFolder).filter_by(name='Memos', parent_id=None, is_system=True).first()
+        if memos_root:
+            parent_id = memos_root.id
+        else:
+            return jsonify({'error': 'Parent folder is required'}), 400
+
     existing = db.session.query(MemoFolder).filter(
         db.func.lower(MemoFolder.name) == name.lower(),
         MemoFolder.parent_id == parent_id
     ).first()
     if existing:
         return jsonify({'error': f'A folder named "{existing.name}" already exists here'}), 409
-    
+
     folder = MemoFolder(name=name, parent_id=parent_id)
     db.session.add(folder)
     db.session.commit()
     return jsonify(folder.to_dict()), 201
 
 
+@app.route('/api/folders/<int:folder_id>', methods=['DELETE'])
 @app.route('/api/memo-folders/<int:folder_id>', methods=['DELETE'])
-def delete_memo_folder(folder_id):
-    """Delete a memo folder. Memos inside move back to root (folder_id = NULL)."""
+def delete_folder(folder_id):
+    """Delete a folder. System root folders cannot be deleted."""
     folder = db.get_or_404(MemoFolder, folder_id)
-    # Unassign all items in this folder
+    if folder.is_system:
+        return jsonify({'error': 'Cannot delete system folders'}), 403
     for item in folder.items:
-        item.memo_folder_id = None
+        item.folder_id = None
     db.session.delete(folder)
     db.session.commit()
     return '', 204
+
+
+@app.route('/api/folders/<int:folder_id>', methods=['PUT'])
+@app.route('/api/memo-folders/<int:folder_id>', methods=['PUT'])
+def update_folder(folder_id):
+    """Update folder attributes, e.g. rename or move in the tree."""
+    folder = db.get_or_404(MemoFolder, folder_id)
+    if folder.is_system:
+        return jsonify({'error': 'Cannot update system root folders'}), 403
+
+    data = request.json
+    name = data.get('name')
+    parent_id = data.get('parent_id')
+
+    if name is not None:
+        name = name.strip()
+        if not name:
+            return jsonify({'error': 'Folder name cannot be empty'}), 400
+        p_id = parent_id if parent_id is not None else folder.parent_id
+        existing = db.session.query(MemoFolder).filter(
+            db.func.lower(MemoFolder.name) == name.lower(),
+            MemoFolder.parent_id == p_id,
+            MemoFolder.id != folder.id
+        ).first()
+        if existing:
+            return jsonify({'error': f'A folder named "{existing.name}" already exists here'}), 409
+        folder.name = name
+
+    if parent_id is not None:
+        if parent_id == folder.id:
+            return jsonify({'error': 'Cannot move folder into itself'}), 400
+        parent = db.get_or_404(MemoFolder, parent_id)
+        
+        # Check descendant cycle
+        def is_descendant(f, target_id):
+            for child in f.children:
+                if child.id == target_id:
+                    return True
+                if is_descendant(child, target_id):
+                    return True
+            return False
+
+        if is_descendant(folder, parent_id):
+            return jsonify({'error': 'Cannot move folder into one of its subfolders'}), 400
+
+        # Check root type alignment
+        def get_root_name(f):
+            curr = f
+            while curr.parent:
+                curr = curr.parent
+            return curr.name
+
+        if get_root_name(folder) != get_root_name(parent):
+            return jsonify({'error': 'Cannot move folders across Memos/Tasks boundary'}), 400
+
+        # Check duplicate name in new parent
+        f_name = name or folder.name
+        existing = db.session.query(MemoFolder).filter(
+            db.func.lower(MemoFolder.name) == f_name.lower(),
+            MemoFolder.parent_id == parent_id,
+            MemoFolder.id != folder.id
+        ).first()
+        if existing:
+            return jsonify({'error': f'A folder named "{existing.name}" already exists here'}), 409
+
+        folder.parent_id = parent_id
+
+    db.session.commit()
+    return jsonify(folder.to_dict()), 200
 
 # ============================================================================
 # ROUTES: Journal Entries CRUD

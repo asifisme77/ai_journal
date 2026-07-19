@@ -10,15 +10,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js" referrerpolicy="origin"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=42">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=44">
 </head>
 
 <body>
 
 
     <div class="app-container">
-        <aside class="sidebar glass-panel">
+        <aside class="sidebar glass-panel" id="left-sidebar">
             <div id="search-panel">
                 <div class="search-quick">
                     <i class="ph ph-magnifying-glass"></i>
@@ -58,38 +58,6 @@
 
             <div class="sidebar-section open">
                 <div class="sidebar-section-header">
-                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-push-pin"></i> Markers
-                    </h2>
-                </div>
-                <div class="sidebar-section-content">
-                    <div id="reminders-container">
-                        <div class="loading-state">No active markers.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-section open">
-                <div class="sidebar-section-header">
-                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-note"></i> Memos
-                        <button id="memo-add-folder-btn" title="New folder" class="memo-add-folder-btn"><i
-                                class="ph ph-folder-plus"></i></button>
-                    </h2>
-                </div>
-                <div class="sidebar-section-content">
-                    <div id="memo-new-folder-row" class="memo-new-folder-row hidden">
-                        <input type="text" id="memo-new-folder-input" placeholder="Folder name..."
-                            class="memo-folder-input" />
-                        <button id="memo-new-folder-save" class="btn-primary btn-small">Save</button>
-                        <button id="memo-new-folder-cancel" class="btn-secondary btn-small">✕</button>
-                    </div>
-                    <div id="memos-container">
-                        <div class="loading-state">No memos yet.</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sidebar-section open">
-                <div class="sidebar-section-header">
                     <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-clock"></i> Timeline</h2>
                 </div>
                 <div class="sidebar-section-content">
@@ -99,7 +67,7 @@
                 </div>
             </div>
         </aside>
-        <div class="sidebar-resizer" id="sidebar-resizer"></div>
+        <div class="sidebar-resizer" id="left-sidebar-resizer"></div>
 
         <main class="main-column">
             <section class="add-item-section glass-panel" style="margin-bottom: 1rem;">
@@ -119,6 +87,46 @@
             <h3 class="archived-header" id="archived-header"><i class="ph ph-archive"></i> Archived View</h3>
             <div id="archived-container" class="items-list"></div>
         </main>
+
+        <div class="sidebar-resizer" id="right-sidebar-resizer"></div>
+        <aside class="sidebar glass-panel" id="right-sidebar">
+            <div class="sidebar-section open">
+                <div class="sidebar-section-header">
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-push-pin"></i> Markers</h2>
+                </div>
+                <div class="sidebar-section-content">
+                    <div id="reminders-container">
+                        <div class="loading-state">No active markers.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section open">
+                <div class="sidebar-section-header">
+                    <h2><i class="ph ph-caret-right sidebar-section-caret"></i><i class="ph ph-folders"></i> Folders
+                        <button id="folder-add-btn" title="New folder" class="folder-add-btn">
+                            <i class="ph ph-folder-plus"></i>
+                        </button>
+                        <div class="folder-filter-toggle" id="folder-filter-toggle">
+                            <button class="filter-btn" data-filter="all" title="Show all folders">All</button>
+                            <button class="filter-btn" data-filter="memos" title="Show only memo folders"><i class="ph ph-note"></i></button>
+                            <button class="filter-btn" data-filter="tasks" title="Show only task folders"><i class="ph ph-kanban"></i></button>
+                        </div>
+                    </h2>
+                </div>
+                <div class="sidebar-section-content">
+                    <div id="folder-new-row" class="folder-new-row hidden">
+                        <input type="text" id="folder-new-input" placeholder="Folder name..."
+                            class="folder-input" />
+                        <button id="folder-new-save" class="btn-primary btn-small">Save</button>
+                        <button id="folder-new-cancel" class="btn-secondary btn-small">✕</button>
+                    </div>
+                    <div id="folders-container">
+                        <div class="loading-state">Loading folders...</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
     </div>
 
     <!-- Global Marker Popover -->
@@ -143,7 +151,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=18"></script>
 </body>
 
 </html>

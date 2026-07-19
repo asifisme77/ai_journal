@@ -32,8 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial data load
     initThemeToggle();
+    initFolderFilter();
     fetchItems();
-    initResizableSidebar();
+    initResizableSidebars();
     initSidebarSections();
 
     /**
@@ -80,6 +81,79 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Initializes the folder view filters (All, Memos, Tasks) and action button.
+     */
+    function initFolderFilter() {
+        const toggleContainer = document.getElementById('folder-filter-toggle');
+        if (toggleContainer) {
+            // Stop toggle clicks from collapsing the sidebar section
+            toggleContainer.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            // Set initial active state based on localStorage
+            const filterState = localStorage.getItem('folderFilter') || 'all';
+            toggleContainer.querySelectorAll('.filter-btn').forEach(btn => {
+                if (btn.dataset.filter === filterState) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // Add click listeners to toggle buttons
+            toggleContainer.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const newFilter = btn.dataset.filter;
+                    localStorage.setItem('folderFilter', newFilter);
+
+                    // Update active class on buttons
+                    toggleContainer.querySelectorAll('.filter-btn').forEach(b => {
+                        b.classList.toggle('active', b.dataset.filter === newFilter);
+                    });
+
+                    // Refresh folders sidebar render
+                    fetchFolders();
+                });
+            });
+        }
+
+        const folderAddBtn = document.getElementById('folder-add-btn');
+        if (folderAddBtn) {
+            folderAddBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const sectionEl = e.target.closest('.sidebar-section');
+                if (sectionEl) sectionEl.classList.add('open');
+
+                const filterState = localStorage.getItem('folderFilter') || 'all';
+                const row = document.getElementById('folder-new-row');
+                const input = document.getElementById('folder-new-input');
+
+                let parentId = '';
+                let rootName = 'Folders';
+
+                if (filterState === 'memos') {
+                    parentId = window.memosRootId || '';
+                    rootName = 'Memos';
+                } else if (filterState === 'tasks') {
+                    parentId = window.tasksRootId || '';
+                    rootName = 'Tasks';
+                } else {
+                    parentId = window.memosRootId || '';
+                    rootName = 'Memos';
+                }
+
+                row.dataset.parentId = parentId;
+                input.placeholder = `New folder in "${rootName}"...`;
+                row.classList.remove('hidden');
+                input.focus();
+            });
+        }
+    }
+
+    /**
      * Initializes collapsible sidebar section headers.
      */
     function initSidebarSections() {
@@ -121,50 +195,65 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Initializes the resizable sidebar logic.
      */
-    function initResizableSidebar() {
-        const sidebar = document.querySelector('.sidebar');
-        const resizer = document.getElementById('sidebar-resizer');
-        if (!sidebar || !resizer) return;
-
-        let isResizing = false;
-
-        resizer.addEventListener('mousedown', (event) => {
-            isResizing = true;
-            document.body.classList.add('body-resizing'); // Consistent with CSS
-
-            // Prevent pointer events on the iframe/editors while resizing to avoid focus issues
-            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
-
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', stopResizing);
-        });
-
-        function handleMouseMove(event) {
-            if (!isResizing) return;
-
-            // Width is based on viewport mouse position
-            let newWidth = event.clientX;
-
-            // Constrain limits
-            if (newWidth < 200) newWidth = 200;
-            if (newWidth > 800) newWidth = 800;
-
-            sidebar.style.width = `${newWidth}px`;
-
-            // If the sidebar is too narrow, we might want to hide some overflow or truncate text
-            // But usually the width control is enough
+    function initResizableSidebars() {
+        // Left Sidebar Resizing
+        const leftSidebar = document.getElementById('left-sidebar');
+        const leftResizer = document.getElementById('left-sidebar-resizer');
+        if (leftSidebar && leftResizer) {
+            let isResizing = false;
+            leftResizer.addEventListener('dragstart', (e) => e.preventDefault());
+            leftResizer.addEventListener('mousedown', (event) => {
+                isResizing = true;
+                document.body.classList.add('body-resizing');
+                document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
+                window.addEventListener('mousemove', handleMouseMoveLeft);
+                window.addEventListener('mouseup', stopResizingLeft);
+            });
+            function handleMouseMoveLeft(event) {
+                if (!isResizing) return;
+                let newWidth = event.clientX;
+                if (newWidth < 200) newWidth = 200;
+                if (newWidth > 600) newWidth = 600;
+                leftSidebar.style.width = `${newWidth}px`;
+            }
+            function stopResizingLeft() {
+                if (!isResizing) return;
+                isResizing = false;
+                document.body.classList.remove('body-resizing');
+                document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
+                window.removeEventListener('mousemove', handleMouseMoveLeft);
+                window.removeEventListener('mouseup', stopResizingLeft);
+            }
         }
 
-        function stopResizing() {
-            if (!isResizing) return;
-            isResizing = false;
-            document.body.classList.remove('body-resizing');
-
-            // Re-enable pointer events
-            document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
-
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', stopResizing);
+        // Right Sidebar Resizing
+        const rightSidebar = document.getElementById('right-sidebar');
+        const rightResizer = document.getElementById('right-sidebar-resizer');
+        if (rightSidebar && rightResizer) {
+            let isResizing = false;
+            rightResizer.addEventListener('dragstart', (e) => e.preventDefault());
+            rightResizer.addEventListener('mousedown', (event) => {
+                isResizing = true;
+                document.body.classList.add('body-resizing');
+                document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'none');
+                window.addEventListener('mousemove', handleMouseMoveRight);
+                window.addEventListener('mouseup', stopResizingRight);
+            });
+            function handleMouseMoveRight(event) {
+                if (!isResizing) return;
+                let newWidth = window.innerWidth - event.clientX;
+                if (newWidth < 200) newWidth = 200;
+                if (newWidth > 600) newWidth = 600;
+                rightSidebar.style.width = `${newWidth}px`;
+            }
+            function stopResizingRight() {
+                if (!isResizing) return;
+                isResizing = false;
+                document.body.classList.remove('body-resizing');
+                document.querySelectorAll('iframe').forEach(ifr => ifr.style.pointerEvents = 'auto');
+                window.removeEventListener('mousemove', handleMouseMoveRight);
+                window.removeEventListener('mouseup', stopResizingRight);
+            }
         }
     }
 
@@ -227,23 +316,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Fetches all MEMO items and folders, renders the Memos sidebar section.
+     * Fetches all items and folders, renders the Folders sidebar section.
      */
-    async function fetchMemos() {
+    async function fetchFolders() {
         try {
-            const res = await fetch('/api/memo-folders');
+            const res = await fetch('/api/folders');
             const data = await res.json();
-            const container = document.getElementById('memos-container');
+            const container = document.getElementById('folders-container');
             container.innerHTML = '';
 
-            const { folders, root_memos } = data;
+            const { folders } = data;
 
-            if (folders.length === 0 && root_memos.length === 0) {
-                container.innerHTML = '<div class="loading-state">No memos yet.</div>';
+            if (!folders || folders.length === 0) {
+                container.innerHTML = '<div class="loading-state">No folders yet.</div>';
                 return;
             }
 
-            // We need a flattened list of folders for the buildMemoItem dropdowns
+            // We need a flattened list of folders for path resolution/dropdowns/checking ancestors
             const allFoldersFlattened = [];
             function flatten(folderList) {
                 folderList.forEach(f => {
@@ -253,7 +342,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             flatten(folders);
 
-            // Build a path map: folder id -> "Parent > Sub > Sub" breadcrumb
+            // Build a path map: folder id -> "Parent › Sub › Sub" breadcrumb
             const pathMap = {};
             function buildPaths(folderList, parentPath) {
                 folderList.forEach(f => {
@@ -262,37 +351,93 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (f.children) buildPaths(f.children, thisPath);
                 });
             }
-            buildPaths(folders, '');
+            folders.forEach(rootFolder => {
+                if (rootFolder.children) buildPaths(rootFolder.children, '');
+            });
+            window.folderPathMap = pathMap;
 
-            // Recursive function to render a folder and its children/items
+            // Capture and expose system root folder IDs globally
+            const memosRoot = folders.find(f => f.name === 'Memos' && f.is_system);
+            const tasksRoot = folders.find(f => f.name === 'Tasks' && f.is_system);
+            if (memosRoot) window.memosRootId = memosRoot.id;
+            if (tasksRoot) window.tasksRootId = tasksRoot.id;
+
+            const filterState = localStorage.getItem('folderFilter') || 'all';
+
+            if (filterState === 'all') {
+                // Render system roots normally
+                folders.forEach(rootFolder => renderSystemRoot(rootFolder, container));
+            } else if (filterState === 'memos') {
+                if (memosRoot) {
+                    if (memosRoot.children) {
+                        memosRoot.children.forEach(child => renderFolder(child, container));
+                    }
+                    const itemsContainer = document.createElement('div');
+                    itemsContainer.className = 'folder-items';
+                    const allItems = [...(memosRoot.items || []), ...(memosRoot.root_items || [])];
+                    if (allItems.length > 0) {
+                        allItems.forEach(item => {
+                            itemsContainer.appendChild(buildFolderItem(item));
+                        });
+                        container.appendChild(itemsContainer);
+                    }
+                }
+            } else if (filterState === 'tasks') {
+                if (tasksRoot) {
+                    if (tasksRoot.children) {
+                        tasksRoot.children.forEach(child => renderFolder(child, container));
+                    }
+                    const itemsContainer = document.createElement('div');
+                    itemsContainer.className = 'folder-items';
+                    const allItems = [...(tasksRoot.items || []), ...(tasksRoot.root_items || [])];
+                    if (allItems.length > 0) {
+                        allItems.forEach(item => {
+                            itemsContainer.appendChild(buildFolderItem(item));
+                        });
+                        container.appendChild(itemsContainer);
+                    }
+                }
+            }
+
+            // Helper to get rootType ('memo' or 'task') of a folder element
+            function getRootType(el) {
+                const filterState = localStorage.getItem('folderFilter') || 'all';
+                if (filterState !== 'all') {
+                    return filterState === 'memos' ? 'memo' : 'task';
+                }
+                const root = el.closest('.folder-system-root');
+                return root ? root.dataset.rootType : null;
+            }
+
+            // Recursive function to render a user folder
             function renderFolder(folder, targetContainer) {
                 const folderEl = document.createElement('div');
-                folderEl.className = 'memo-folder';
+                folderEl.className = 'folder';
                 folderEl.dataset.folderId = folder.id;
 
                 folderEl.innerHTML = `
-                    <div class="memo-folder-header" data-folder-id="${folder.id}">
-                        <i class="ph ph-caret-down memo-folder-caret"></i>
-                        <i class="ph ph-folder memo-folder-icon"></i>
-                        <span class="memo-folder-name" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</span>
-                        <div class="memo-folder-actions">
-                            <button class="memo-folder-add-sub-btn" title="New subfolder" data-folder-id="${folder.id}">
+                    <div class="folder-header" data-folder-id="${folder.id}">
+                        <i class="ph ph-caret-down folder-caret"></i>
+                        <i class="ph ph-folder folder-icon"></i>
+                        <span class="folder-name" title="${escapeHtml(folder.name)}">${escapeHtml(folder.name)}</span>
+                        <div class="folder-actions">
+                            <button class="folder-add-sub-btn" title="New subfolder" data-folder-id="${folder.id}">
                                 <i class="ph ph-folder-plus"></i>
                             </button>
-                            <button class="memo-folder-delete-btn" title="Delete folder" data-folder-id="${folder.id}">
+                            <button class="folder-delete-btn" title="Delete folder" data-folder-id="${folder.id}">
                                 <i class="ph ph-trash"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="memo-folder-content">
-                        <div class="memo-folder-children"></div>
-                        <div class="memo-folder-items"></div>
+                    <div class="folder-content">
+                        <div class="folder-children"></div>
+                        <div class="folder-items"></div>
                     </div>
                 `;
 
-                const contentEl = folderEl.querySelector('.memo-folder-content');
-                const childrenContainer = folderEl.querySelector('.memo-folder-children');
-                const itemsContainer = folderEl.querySelector('.memo-folder-items');
+                const contentEl = folderEl.querySelector('.folder-content');
+                const childrenContainer = folderEl.querySelector('.folder-children');
+                const itemsContainer = folderEl.querySelector('.folder-items');
 
                 // Render subfolders
                 if (folder.children && folder.children.length > 0) {
@@ -302,51 +447,102 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Render items
                 if (folder.items && folder.items.length > 0) {
                     folder.items.forEach(item => {
-                        itemsContainer.appendChild(buildMemoItem(item, allFoldersFlattened, pathMap));
+                        itemsContainer.appendChild(buildFolderItem(item));
                     });
                 } else if (!folder.children || folder.children.length === 0) {
-                    itemsContainer.innerHTML = '<div class="memo-empty-folder">Empty</div>';
+                    itemsContainer.innerHTML = '<div class="folder-empty-folder">Empty</div>';
                 }
 
                 // Toggle collapse
-                folderEl.querySelector('.memo-folder-header').addEventListener('click', (e) => {
+                folderEl.querySelector('.folder-header').addEventListener('click', (e) => {
                     if (e.target.closest('button')) return;
                     folderEl.classList.toggle('collapsed');
                 });
 
+                // --- Drag-and-drop: make folder draggable ---
+                const headerEl = folderEl.querySelector('.folder-header');
+                headerEl.setAttribute('draggable', 'true');
+                headerEl.addEventListener('dragstart', (e) => {
+                    e.stopPropagation();
+                    e.dataTransfer.setData('text/folder-id', String(folder.id));
+                    e.dataTransfer.effectAllowed = 'move';
+                    folderEl.classList.add('folder-dragging');
+
+                    // Highlight valid targets of matching root type, excluding self & descendants
+                    const folderType = getRootType(folderEl);
+                    const filterState = localStorage.getItem('folderFilter') || 'all';
+                    let selector = `.folder-system-root[data-root-type="${folderType}"] .folder-header, .folder-system-root[data-root-type="${folderType}"] .folder-root-header`;
+                    if (filterState !== 'all') {
+                        selector = '.folder-header';
+                    }
+                    document.querySelectorAll(selector).forEach(h => {
+                        const fEl = h.closest('.folder');
+                        if (fEl && (fEl === folderEl || folderEl.contains(fEl))) return;
+                        h.classList.add('folder-drop-hint');
+                    });
+                });
+                headerEl.addEventListener('dragend', (e) => {
+                    e.stopPropagation();
+                    folderEl.classList.remove('folder-dragging');
+                    document.querySelectorAll('.folder-header, .folder-root-header').forEach(h => h.classList.remove('folder-drop-hint', 'folder-drop-target'));
+                });
+
                 // --- Drag-and-drop: folder as a drop target ---
-                const headerEl = folderEl.querySelector('.memo-folder-header');
                 headerEl.addEventListener('dragover', (e) => {
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
-                    headerEl.classList.add('memo-drop-target');
-                    // Auto-expand collapsed folder on hover
+                    headerEl.classList.add('folder-drop-target');
                     if (folderEl.classList.contains('collapsed')) {
                         folderEl.classList.remove('collapsed');
                     }
                 });
                 headerEl.addEventListener('dragleave', (e) => {
-                    headerEl.classList.remove('memo-drop-target');
+                    headerEl.classList.remove('folder-drop-target');
                 });
                 headerEl.addEventListener('drop', async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    headerEl.classList.remove('memo-drop-target');
-                    const draggedItemId = e.dataTransfer.getData('text/memo-item-id');
-                    if (!draggedItemId) return;
-                    await fetch(`/api/items/${draggedItemId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ memo_folder_id: folder.id })
-                    });
-                    fetchMemos();
+                    headerEl.classList.remove('folder-drop-target');
+
+                    const draggedItemId = e.dataTransfer.getData('text/folder-item-id');
+                    const draggedFolderId = e.dataTransfer.getData('text/folder-id');
+
+                    if (draggedItemId) {
+                        const targetType = getRootType(folderEl);
+                        const draggedItem = window.allItemsData.find(i => i.id === parseInt(draggedItemId, 10));
+                        if (!draggedItem) return;
+                        const itemType = draggedItem.state === 'MEMO' ? 'memo' : 'task';
+                        if (targetType !== itemType) return;
+
+                        await fetch(`/api/items/${draggedItemId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folder_id: folder.id })
+                        });
+                        fetchFolders();
+                    } else if (draggedFolderId) {
+                        if (draggedFolderId === String(folder.id)) return;
+                        const draggedFolderEl = document.querySelector(`.folder[data-folder-id="${draggedFolderId}"]`);
+                        if (!draggedFolderEl || draggedFolderEl.contains(folderEl)) return;
+
+                        const targetType = getRootType(folderEl);
+                        const draggedFolderType = getRootType(draggedFolderEl);
+                        if (targetType !== draggedFolderType) return;
+
+                        await fetch(`/api/folders/${draggedFolderId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ parent_id: folder.id })
+                        });
+                        fetchFolders();
+                    }
                 });
 
                 // Add subfolder
-                folderEl.querySelector('.memo-folder-add-sub-btn').addEventListener('click', async (e) => {
+                folderEl.querySelector('.folder-add-sub-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const row = document.getElementById('memo-new-folder-row');
-                    const input = document.getElementById('memo-new-folder-input');
+                    const row = document.getElementById('folder-new-row');
+                    const input = document.getElementById('folder-new-input');
                     row.dataset.parentId = folder.id;
                     input.placeholder = `Subfolder in "${folder.name}"...`;
                     row.classList.remove('hidden');
@@ -354,115 +550,268 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 // Delete folder
-                folderEl.querySelector('.memo-folder-delete-btn').addEventListener('click', async (e) => {
+                folderEl.querySelector('.folder-delete-btn').addEventListener('click', async (e) => {
                     e.stopPropagation();
-                    if (!confirm(`Delete folder "${folder.name}"? Everything inside will be moved up or deleted.`)) return;
-                    await fetch(`/api/memo-folders/${folder.id}`, { method: 'DELETE' });
-                    fetchMemos();
+                    if (!confirm(`Delete folder "${folder.name}"? Everything inside will be moved up.`)) return;
+                    await fetch(`/api/folders/${folder.id}`, { method: 'DELETE' });
+                    fetchFolders();
                 });
 
                 targetContainer.appendChild(folderEl);
             }
 
-            // Render root folders
-            folders.forEach(folder => renderFolder(folder, container));
+            function renderSystemRoot(rootFolder, targetContainer) {
+                const isMemos = rootFolder.name === 'Memos';
+                const iconClass = isMemos ? 'ph-note' : 'ph-kanban';
+                const accentClass = isMemos ? 'folder-root-memo' : 'folder-root-task';
 
-            // Render root-level memos
-            if (root_memos.length > 0) {
-                root_memos.forEach(item => {
-                    container.appendChild(buildMemoItem(item, allFoldersFlattened, pathMap));
+                const rootEl = document.createElement('div');
+                rootEl.className = `folder-system-root ${accentClass}`;
+                rootEl.dataset.folderId = rootFolder.id;
+                rootEl.dataset.rootType = isMemos ? 'memo' : 'task';
+
+                rootEl.innerHTML = `
+                    <div class="folder-root-header" data-folder-id="${rootFolder.id}">
+                        <i class="ph ph-caret-down folder-root-caret"></i>
+                        <i class="ph ${iconClass} folder-root-icon"></i>
+                        <span class="folder-root-name">${escapeHtml(rootFolder.name)}</span>
+                        <div class="folder-root-actions">
+                            <button class="folder-add-sub-btn" title="New folder" data-folder-id="${rootFolder.id}">
+                                <i class="ph ph-folder-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="folder-root-content">
+                        <div class="folder-children"></div>
+                        <div class="folder-items"></div>
+                    </div>
+                `;
+
+                // Render child folders
+                const childrenContainer = rootEl.querySelector('.folder-children');
+                if (rootFolder.children) {
+                    rootFolder.children.forEach(child => renderFolder(child, childrenContainer));
+                }
+
+                // Render items (direct items + root_items)
+                const itemsContainer = rootEl.querySelector('.folder-items');
+                const allItems = [...(rootFolder.items || []), ...(rootFolder.root_items || [])];
+                
+                if (allItems.length > 0) {
+                    allItems.forEach(item => {
+                        itemsContainer.appendChild(buildFolderItem(item));
+                    });
+                } else if (!rootFolder.children || rootFolder.children.length === 0) {
+                    itemsContainer.innerHTML = '<div class="folder-empty-folder">Empty</div>';
+                }
+
+                // Toggle collapse
+                rootEl.querySelector('.folder-root-header').addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    rootEl.classList.toggle('collapsed');
+                });
+
+                // "New folder" button wiring
+                rootEl.querySelector('.folder-add-sub-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = document.getElementById('folder-new-row');
+                    const input = document.getElementById('folder-new-input');
+                    row.dataset.parentId = rootFolder.id;
+                    input.placeholder = `New folder in "${rootFolder.name}"...`;
+                    row.classList.remove('hidden');
+                    input.focus();
+                });
+
+                // --- Drag-and-drop: system root as a drop target ---
+                const headerEl = rootEl.querySelector('.folder-root-header');
+                headerEl.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    headerEl.classList.add('folder-drop-target');
+                    if (rootEl.classList.contains('collapsed')) {
+                        rootEl.classList.remove('collapsed');
+                    }
+                });
+                headerEl.addEventListener('dragleave', (e) => {
+                    headerEl.classList.remove('folder-drop-target');
+                });
+                headerEl.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    headerEl.classList.remove('folder-drop-target');
+
+                    const draggedItemId = e.dataTransfer.getData('text/folder-item-id');
+                    const draggedFolderId = e.dataTransfer.getData('text/folder-id');
+
+                    if (draggedItemId) {
+                        // Type validation
+                        const targetType = rootEl.dataset.rootType;
+                        const draggedItem = window.allItemsData.find(i => i.id === parseInt(draggedItemId, 10));
+                        if (!draggedItem) return;
+                        const itemType = draggedItem.state === 'MEMO' ? 'memo' : 'task';
+                        if (targetType !== itemType) return;
+
+                        await fetch(`/api/items/${draggedItemId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folder_id: null })
+                        });
+                        fetchFolders();
+                    } else if (draggedFolderId) {
+                        // Dragged a folder to a system root (top-level)
+                        const targetType = rootEl.dataset.rootType;
+                        const draggedFolderEl = document.querySelector(`.folder[data-folder-id="${draggedFolderId}"]`);
+                        if (!draggedFolderEl) return;
+                        const draggedFolderType = getRootType(draggedFolderEl);
+                        if (targetType !== draggedFolderType) return;
+
+                        await fetch(`/api/folders/${draggedFolderId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ parent_id: rootFolder.id })
+                        });
+                        fetchFolders();
+                    }
+                });
+
+                targetContainer.appendChild(rootEl);
+            }
+
+            // --- Drag-and-drop: folders-container as drop target when in filtered mode ---
+            if (filterState !== 'all') {
+                container.addEventListener('dragover', (e) => {
+                    if (!e.target.closest('.folder-header')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        container.classList.add('folder-drop-target');
+                    }
+                });
+                container.addEventListener('dragleave', (e) => {
+                    if (!container.contains(e.relatedTarget)) {
+                        container.classList.remove('folder-drop-target');
+                    }
+                });
+                container.addEventListener('drop', async (e) => {
+                    container.classList.remove('folder-drop-target');
+                    if (e.target.closest('.folder-header')) return;
+                    e.preventDefault();
+                    const draggedItemId = e.dataTransfer.getData('text/folder-item-id');
+                    const draggedFolderId = e.dataTransfer.getData('text/folder-id');
+
+                    if (draggedItemId) {
+                        const draggedItem = window.allItemsData.find(i => i.id === parseInt(draggedItemId, 10));
+                        if (!draggedItem) return;
+                        const itemType = draggedItem.state === 'MEMO' ? 'memo' : 'task';
+                        if (filterState !== itemType) return;
+
+                        await fetch(`/api/items/${draggedItemId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folder_id: null })
+                        });
+                        fetchFolders();
+                    } else if (draggedFolderId) {
+                        const targetParentId = (filterState === 'memos') ? window.memosRootId : window.tasksRootId;
+                        if (!targetParentId) return;
+
+                        const draggedFolderEl = document.querySelector(`.folder[data-folder-id="${draggedFolderId}"]`);
+                        if (!draggedFolderEl) return;
+                        const draggedFolderType = getRootType(draggedFolderEl);
+                        if (filterState === 'memos' && draggedFolderType !== 'memo') return;
+                        if (filterState === 'tasks' && draggedFolderType !== 'task') return;
+
+                        await fetch(`/api/folders/${draggedFolderId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ parent_id: targetParentId })
+                        });
+                        fetchFolders();
+                    }
                 });
             }
 
-            // --- Drag-and-drop: memos-container as root drop target ---
-            container.addEventListener('dragover', (e) => {
-                // Only show root drop zone when not hovering over a folder header
-                if (!e.target.closest('.memo-folder-header')) {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    container.classList.add('memo-root-drop-target');
-                }
-            });
-            container.addEventListener('dragleave', (e) => {
-                // Only remove if actually leaving the container
-                if (!container.contains(e.relatedTarget)) {
-                    container.classList.remove('memo-root-drop-target');
-                }
-            });
-            container.addEventListener('drop', async (e) => {
-                container.classList.remove('memo-root-drop-target');
-                // Don't handle if dropped on a folder header (that handler takes priority)
-                if (e.target.closest('.memo-folder-header')) return;
-                e.preventDefault();
-                const draggedItemId = e.dataTransfer.getData('text/memo-item-id');
-                if (!draggedItemId) return;
-                await fetch(`/api/items/${draggedItemId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memo_folder_id: null })
-                });
-                fetchMemos();
-            });
-
         } catch (error) {
-            console.error('Error fetching memos:', error);
+            console.error('Error fetching folders:', error);
         }
     }
 
     /**
-     * Builds a single memo sidebar item element with drag-and-drop folder assignment.
+     * Builds a single sidebar item element with drag-and-drop folder assignment.
      */
-    function buildMemoItem(item, folders, pathMap) {
+    function buildFolderItem(item) {
         const el = document.createElement('div');
-        el.className = 'memo-item';
+        el.className = 'folder-item';
         el.dataset.itemId = item.id;
         el.draggable = true;
 
-        // Build path + date meta line
+        // Build state icon and badge
+        const isMemo = item.state === 'MEMO';
+        let itemIcon = 'ph-note';
+        let badgeHtml = '';
+
+        if (!isMemo) {
+            if (item.state === 'TODO') {
+                itemIcon = 'ph-check-square';
+                badgeHtml = '<span class="folder-item-state folder-item-state-todo">todo</span>';
+            } else if (item.state === 'WIP') {
+                itemIcon = 'ph-spinner';
+                badgeHtml = '<span class="folder-item-state folder-item-state-wip">wip</span>';
+            }
+        }
+
         const dateObj = parseUTCDate(item.created_at);
         const dateStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        const folderPath = (pathMap && item.memo_folder_id && pathMap[item.memo_folder_id]) ? pathMap[item.memo_folder_id] : '';
-        const pathHtml = folderPath
-            ? `<span class="memo-item-path" title="${escapeHtml(folderPath)}"><i class="ph ph-folder-open"></i> ${escapeHtml(folderPath)}</span>`
-            : '';
+        const folderPath = (window.folderPathMap && item.folder_id && window.folderPathMap[item.folder_id]) ? window.folderPathMap[item.folder_id] : '';
+        let pathHtml = '';
+        if (folderPath) {
+            const parts = folderPath.split(' › ');
+            const immediateName = parts[parts.length - 1];
+            pathHtml = `<span class="folder-item-path" title="${escapeHtml(folderPath)}"><i class="ph ph-folder-open"></i> ${escapeHtml(immediateName)}</span>`;
+        }
 
         el.innerHTML = `
-            <div class="memo-item-inner">
-                <i class="ph ph-dots-six-vertical memo-drag-handle"></i>
-                <i class="ph ph-note memo-item-icon"></i>
-                <div class="memo-item-body">
-                    <span class="memo-item-title" title="${escapeHtml(item.heading)}">${escapeHtml(item.heading)}</span>
-                    <div class="memo-item-meta">
-                        <span class="memo-item-date"><i class="ph ph-clock"></i> ${dateStr}</span>
+            <div class="folder-item-inner">
+                <i class="ph ph-dots-six-vertical folder-drag-handle"></i>
+                <i class="ph ${itemIcon} folder-item-icon"></i>
+                <div class="folder-item-body">
+                    <div class="folder-item-title-row">
+                        <span class="folder-item-title" title="${escapeHtml(item.heading)}">${escapeHtml(item.heading)}</span>
+                        ${badgeHtml}
+                    </div>
+                    <div class="folder-item-meta">
+                        <span class="folder-item-date"><i class="ph ph-clock"></i> ${dateStr}</span>
                         ${pathHtml}
                     </div>
                 </div>
             </div>
         `;
 
-        // --- Drag-and-drop: make memo item draggable ---
+        // --- Drag-and-drop: make item draggable ---
         el.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/memo-item-id', String(item.id));
+            e.dataTransfer.setData('text/folder-item-id', String(item.id));
             e.dataTransfer.effectAllowed = 'move';
-            el.classList.add('memo-item-dragging');
-            // Highlight all valid drop targets
-            document.querySelectorAll('.memo-folder-header').forEach(h => h.classList.add('memo-drop-hint'));
-            document.getElementById('memos-container').classList.add('memo-drop-hint-root');
+            el.classList.add('folder-item-dragging');
+            // Highlight all valid drop targets matching the type
+            const itemType = isMemo ? 'memo' : 'task';
+            const filterState = localStorage.getItem('folderFilter') || 'all';
+            let selector = `.folder-system-root[data-root-type="${itemType}"] .folder-header, .folder-system-root[data-root-type="${itemType}"] .folder-root-header`;
+            if (filterState !== 'all') {
+                selector = '.folder-header';
+            }
+            document.querySelectorAll(selector).forEach(h => h.classList.add('folder-drop-hint'));
         });
         el.addEventListener('dragend', () => {
-            el.classList.remove('memo-item-dragging');
+            el.classList.remove('folder-item-dragging');
             // Remove all drop target highlights
-            document.querySelectorAll('.memo-folder-header').forEach(h => h.classList.remove('memo-drop-hint', 'memo-drop-target'));
-            document.getElementById('memos-container').classList.remove('memo-drop-hint-root', 'memo-root-drop-target');
+            document.querySelectorAll('.folder-header, .folder-root-header').forEach(h => h.classList.remove('folder-drop-hint', 'folder-drop-target'));
         });
 
         // Click title to navigate to last entry
-        el.querySelector('.memo-item-title').addEventListener('click', () => {
+        el.querySelector('.folder-item-title').addEventListener('click', () => {
             if (item.entries && item.entries.length > 0) {
                 const lastEntry = item.entries[item.entries.length - 1];
                 const itemDateStr = parseUTCDate(item.created_at).toDateString();
                 const isToday = itemDateStr === new Date().toDateString();
-                // Archived if: state is DONE OR (state is MEMO AND not created today)
                 const isArchived = item.state === 'DONE' || (item.state === 'MEMO' && !isToday);
                 window.focusEntry(lastEntry.id, isArchived, item.id);
             }
@@ -472,68 +821,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---- New Folder creation UI ----
-    document.getElementById('memo-add-folder-btn').addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const sectionEl = e.target.closest('.sidebar-section');
-        if (sectionEl) sectionEl.classList.add('open');
-
-        const row = document.getElementById('memo-new-folder-row');
-        const input = document.getElementById('memo-new-folder-input');
-        row.dataset.parentId = '';
-        input.placeholder = 'Folder name...';
-        row.classList.remove('hidden');
-        input.focus();
-    });
-
-    document.getElementById('memo-new-folder-cancel').addEventListener('click', () => {
-        const row = document.getElementById('memo-new-folder-row');
-        const input = document.getElementById('memo-new-folder-input');
-        row.classList.add('hidden');
-        row.dataset.parentId = '';
-        input.value = '';
-        input.placeholder = 'Folder name...';
-    });
-
-    document.getElementById('memo-new-folder-save').addEventListener('click', async () => {
-        const input = document.getElementById('memo-new-folder-input');
-        const row = document.getElementById('memo-new-folder-row');
-        const name = input.value.trim();
-        if (!name) return;
-
-        const payload = { name };
-        if (row.dataset.parentId) {
-            payload.parent_id = parseInt(row.dataset.parentId, 10);
-        }
-
-        const res = await fetch('/api/memo-folders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            // Show error inline on the input
-            input.classList.add('memo-folder-input-error');
-            input.placeholder = err.error || 'Folder name already exists';
+    const folderNewCancel = document.getElementById('folder-new-cancel');
+    if (folderNewCancel) {
+        folderNewCancel.addEventListener('click', () => {
+            const row = document.getElementById('folder-new-row');
+            const input = document.getElementById('folder-new-input');
+            row.classList.add('hidden');
+            row.dataset.parentId = '';
             input.value = '';
-            input.focus();
-            setTimeout(() => input.classList.remove('memo-folder-input-error'), 1500);
-            return;
-        }
+            input.placeholder = 'Folder name...';
+        });
+    }
 
-        input.value = '';
-        input.placeholder = 'Folder name...';
-        row.dataset.parentId = '';
-        row.classList.add('hidden');
-        fetchMemos();
-    });
+    const folderNewSave = document.getElementById('folder-new-save');
+    if (folderNewSave) {
+        folderNewSave.addEventListener('click', async () => {
+            const input = document.getElementById('folder-new-input');
+            const row = document.getElementById('folder-new-row');
+            const name = input.value.trim();
+            if (!name) return;
 
-    document.getElementById('memo-new-folder-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('memo-new-folder-save').click();
-        if (e.key === 'Escape') document.getElementById('memo-new-folder-cancel').click();
-    });
+            const payload = { name };
+            if (row.dataset.parentId) {
+                payload.parent_id = parseInt(row.dataset.parentId, 10);
+            }
+
+            const res = await fetch('/api/folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                input.classList.add('folder-input-error');
+                input.placeholder = err.error || 'Folder name already exists';
+                input.value = '';
+                input.focus();
+                setTimeout(() => input.classList.remove('folder-input-error'), 1500);
+                return;
+            }
+
+            input.value = '';
+            input.placeholder = 'Folder name...';
+            row.dataset.parentId = '';
+            row.classList.add('hidden');
+            fetchFolders();
+        });
+    }
+
+    const folderNewInput = document.getElementById('folder-new-input');
+    if (folderNewInput) {
+        folderNewInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('folder-new-save').click();
+            if (e.key === 'Escape') document.getElementById('folder-new-cancel').click();
+        });
+    }
 
     /**
      * Fetches all work items from the API and renders them.
@@ -542,11 +885,11 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function fetchItems() {
         fetchReminders();
-        fetchMemos();
+        fetchFolders();
         try {
             const [itemsRes, foldersRes] = await Promise.all([
                 fetch('/api/items'),
-                fetch('/api/memo-folders')
+                fetch('/api/folders')
             ]);
             const items = await itemsRes.json();
             const folderData = await foldersRes.json();
@@ -560,7 +903,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (f.children) buildPaths(f.children, thisPath);
                 });
             }
-            buildPaths(folderData.folders || [], '');
+            if (folderData.folders) {
+                folderData.folders.forEach(rootFolder => {
+                    if (rootFolder.children) buildPaths(rootFolder.children, '');
+                });
+            }
             window.folderPathMap = folderPathMap;
 
             // Store globally for the archived-item focus flow
@@ -607,31 +954,28 @@ document.addEventListener('DOMContentLoaded', () => {
         div.className = 'work-item';
         div.dataset.id = item.id;
 
-        // Build folder path for MEMO items
+        // Build folder path for items (MEMO or TODO/WIP)
         let folderPathHtml = '';
-        if (item.state === 'MEMO' && item.memo_folder_id && window.folderPathMap && window.folderPathMap[item.memo_folder_id]) {
-            const path = window.folderPathMap[item.memo_folder_id];
-            folderPathHtml = `<span class="work-item-folder-path" title="${escapeHtml(path)}"><i class="ph ph-folder-open"></i> ${escapeHtml(path)}</span>`;
+        if (item.folder_id && window.folderPathMap && window.folderPathMap[item.folder_id]) {
+            const path = window.folderPathMap[item.folder_id];
+            const parts = path.split(' › ');
+            const immediateName = parts[parts.length - 1];
+            folderPathHtml = `<span class="work-item-folder-path" title="${escapeHtml(path)}"><i class="ph ph-folder-open"></i> ${escapeHtml(immediateName)}</span>`;
         }
-
-        const metaRowHtml = folderPathHtml
-            ? `<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.1rem; font-weight: normal; display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding-left: 1.2rem;"><i class="ph ph-folder-open"></i> ${folderPathHtml}</div>`
-            : '';
 
         div.innerHTML = `
             <div class="work-item-header">
                 <div class="work-item-title-group">
                     <i class="ph ph-dots-six-vertical drag-handle" title="Drag to reorder"></i>
-                    <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; margin-right: 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.35rem; width: 100%;">
-                            <i class="ph ph-plus toggle-icon toggle-icon-collapsed" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
-                            <i class="ph ph-minus toggle-icon toggle-icon-expanded" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
-                            <input type="text" class="item-title-input" value="${escapeHtml(item.heading)}" onchange="updateItemHeading(${item.id}, this.value)">
-                        </div>
-                        ${metaRowHtml}
+                    <i class="ph ph-plus toggle-icon toggle-icon-collapsed" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
+                    <i class="ph ph-minus toggle-icon toggle-icon-expanded" style="font-size: 0.85rem; flex-shrink: 0; cursor: pointer;"></i>
+                    <div class="item-title-wrapper">
+                        <span class="item-title-text" title="${escapeHtml(item.heading)} (Double-click to edit)">${escapeHtml(item.heading)}</span>
+                        <input type="text" class="item-title-input hidden" value="${escapeHtml(item.heading)}">
                     </div>
                 </div>
                 <div class="item-actions" onclick="event.stopPropagation()">
+                    ${folderPathHtml}
                     <button class="btn-secondary btn-danger btn-small" style="padding: 0.25rem 0.5rem; margin-right: 0.5rem;" onclick="deleteItem(${item.id})"><i class="ph ph-trash"></i></button>
                     <div class="item-state-controls" style="display:inline-block;">
                         <select class="state-select state-${item.state}" onchange="updateState(${item.id}, this.value)">
@@ -650,21 +994,49 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
+        // Edit-in-place title logic
+        const titleTextEl = div.querySelector('.item-title-text');
+        const titleInputEl = div.querySelector('.item-title-input');
+
+        titleTextEl.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            titleTextEl.classList.add('hidden');
+            titleInputEl.classList.remove('hidden');
+            titleInputEl.focus();
+            titleInputEl.select();
+        });
+
+        titleInputEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        titleInputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                titleInputEl.blur();
+            } else if (e.key === 'Escape') {
+                titleInputEl.value = item.heading;
+                titleInputEl.blur();
+            }
+        });
+
+        titleInputEl.addEventListener('blur', async () => {
+            const val = titleInputEl.value.trim();
+            if (val && val !== item.heading) {
+                item.heading = val;
+                titleTextEl.textContent = val;
+                titleTextEl.title = `${val} (Double-click to edit)`;
+                await updateItemHeading(item.id, val);
+            }
+            titleInputEl.classList.add('hidden');
+            titleTextEl.classList.remove('hidden');
+        });
+
         // Toggle expand/collapse on header click
         div.querySelector('.work-item-header').addEventListener('click', (e) => {
-            // Ignore clicks on buttons/selects/drag handle (these handle their own logic)
-            if (e.target.closest('button') || e.target.closest('select') || e.target.closest('.drag-handle')) return;
+            // Ignore clicks on buttons/selects/drag handle/title wrapper
+            if (e.target.closest('button') || e.target.closest('select') || e.target.closest('.drag-handle') || e.target.closest('.item-title-wrapper')) return;
 
-            const isInput = e.target.tagName === 'INPUT';
-            const isExpanded = div.classList.contains('expanded');
-
-            if (isInput) {
-                if (!isExpanded) {
-                    div.classList.add('expanded');
-                }
-            } else {
-                div.classList.toggle('expanded');
-            }
+            div.classList.toggle('expanded');
         });
 
         // --- Drag-and-drop: make work item draggable via handle ---
@@ -1544,6 +1916,107 @@ function _unfloatToolbar(toolbarEl) {
 }
 
 /**
+ * Parses Excel TSV text (tabs between cells, newlines between rows,
+ * quoted multi-line cells) and returns an HTML table string.
+ */
+function excelTsvToHtmlTable(tsv) {
+    // Normalize line endings
+    const normalized = tsv.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // Parse rows respecting quoted multi-line cells
+    const rows = [];
+    let currentRow = [];
+    let currentCell = '';
+    let inQuote = false;
+
+    for (let i = 0; i < normalized.length; i++) {
+        const ch = normalized[i];
+        const next = normalized[i + 1];
+
+        if (inQuote) {
+            if (ch === '"' && next === '"') {
+                // Escaped quote inside quoted cell
+                currentCell += '"';
+                i++;
+            } else if (ch === '"') {
+                // End of quoted cell
+                inQuote = false;
+            } else {
+                currentCell += ch;
+            }
+        } else {
+            if (ch === '"') {
+                inQuote = true;
+            } else if (ch === '\t') {
+                currentRow.push(currentCell);
+                currentCell = '';
+            } else if (ch === '\n') {
+                currentRow.push(currentCell);
+                currentCell = '';
+                rows.push(currentRow);
+                currentRow = [];
+            } else {
+                currentCell += ch;
+            }
+        }
+    }
+
+    // Don't forget the last cell/row
+    if (currentCell || currentRow.length > 0) {
+        currentRow.push(currentCell);
+    }
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+
+    // Build HTML table
+    let html = '<table><tbody>';
+    rows.forEach((row, ri) => {
+        html += '<tr>';
+        row.forEach(cell => {
+            // Escape HTML and convert newlines to <br> for multi-line cells
+            const escaped = escapeHtml(cell).replace(/\n/g, '<br>');
+            html += `<td>${escaped}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+
+    return html;
+}
+
+/**
+ * Converts an HTML table selection to tab-separated plain text.
+ * Replaces intra-cell line breaks with a space so multi-line cells
+ * stay in one cell when pasted into Excel.
+ */
+function htmlToTsvPlainText(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const rows = doc.querySelectorAll('tr');
+    const tsvRows = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td, th');
+        const tsvCells = [];
+        cells.forEach(cell => {
+            // Replace all block-level and line-break tags with a space
+            let text = cell.innerHTML
+                .replace(/<br\s*\/?>/gi, ' ')
+                .replace(/<\/p>/gi, ' ')
+                .replace(/<\/div>/gi, ' ')
+                .replace(/<\/h[1-6]>/gi, ' ')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&nbsp;/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            tsvCells.push(text);
+        });
+        tsvRows.push(tsvCells.join('\t'));
+    });
+    return tsvRows.join('\r\n');
+}
+
+/**
  * Initializes a TinyMCE inline editor for a journal entry.
  * Configures: outliner, auto-save, custom toolbar buttons, click handlers,
  * table indentation, and keyboard shortcuts.
@@ -1605,7 +2078,7 @@ function initTinyMCE(entry, autoFocus = false) {
         setup: function (editor) {
 
             // ================================================================
-            // PASTE HANDLER: Preserve plain text in PRE blocks
+            // PASTE HANDLER: Convert Excel TSV to HTML table
             // ================================================================
             editor.on('paste', function (e) {
                 const node = editor.selection.getNode();
@@ -1625,12 +2098,72 @@ function initTinyMCE(entry, autoFocus = false) {
                         const safeText = escapeHtml(normalizedText).replace(/\n/g, '<br>');
                         editor.insertContent(safeText);
                     }
+                    return;
+                }
+
+                // Check if clipboard contains TSV data (tabs + newlines = Excel table)
+                let plainText = '';
+                if (e.clipboardData && e.clipboardData.getData) {
+                    plainText = e.clipboardData.getData('text/plain');
+                } else if (window.clipboardData && window.clipboardData.getData) {
+                    plainText = window.clipboardData.getData('Text');
+                }
+
+                if (plainText && plainText.includes('\t') && (plainText.includes('\n') || plainText.includes('\r'))) {
+                    e.preventDefault();
+
+                    // Parse Excel TSV respecting quoted multi-line cells
+                    const tableHtml = excelTsvToHtmlTable(plainText);
+                    editor.insertContent(tableHtml);
                 }
             });
 
             // ================================================================
             // COPY/CUT HANDLER: Convert structural indents to plain spaces
             // ================================================================
+
+            // Intercept the native copy event on the editor's body (inline mode).
+            // In inline mode, the editor lives in the main document, so we use
+            // a capture-phase listener on the editor body to beat TinyMCE's
+            // synthetic event system.
+            function onNativeCopy(e) {
+                const sel = editor.selection;
+                if (sel.isCollapsed()) return;
+
+                const selectedBlocks = sel.getSelectedBlocks();
+                const isTableSelection = selectedBlocks.some(block => editor.dom.getParent(block, 'table'));
+
+                if (!isTableSelection) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const richHtml = sel.getContent({ format: 'html' });
+                const selectionHtml = sel.getContent({ format: 'html' });
+                const plainText = htmlToTsvPlainText(selectionHtml);
+
+                if (e.clipboardData) {
+                    e.clipboardData.setData('text/plain', plainText);
+                    e.clipboardData.setData('text/html', richHtml);
+                }
+
+                // For cut events, also delete the selection
+                if (e.type === 'cut' && editor.execCommand) {
+                    editor.execCommand('delete');
+                }
+            }
+
+            // Attach on init so the editor's body is ready.
+            // Use capture phase so we intercept before browser default.
+            editor.on('init', function () {
+                const body = editor.getBody();
+                if (body) {
+                    body.addEventListener('copy', onNativeCopy, true);
+                    body.addEventListener('cut', onNativeCopy, true);
+                }
+            });
+
+            // Also keep the TinyMCE-level handler for non-table selections
             editor.on('copy cut', function (e) {
                 const sel = editor.selection;
                 if (sel.isCollapsed()) return;
@@ -1638,7 +2171,7 @@ function initTinyMCE(entry, autoFocus = false) {
                 const selectedBlocks = sel.getSelectedBlocks();
                 const isTableSelection = selectedBlocks.some(block => editor.dom.getParent(block, 'table'));
 
-                // Preserve native table copy behavior so Excel can receive proper table data.
+                // Table copies are handled by the native listener above — skip here
                 if (isTableSelection) {
                     return;
                 }
