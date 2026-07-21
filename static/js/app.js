@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchItems();
     initResizableSidebars();
     initSidebarSections();
+    initCollapsibleRightSidebar();
 
     /**
      * Initializes the theme toggle button action.
@@ -254,6 +255,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.removeEventListener('mousemove', handleMouseMoveRight);
                 window.removeEventListener('mouseup', stopResizingRight);
             }
+        }
+    }
+
+    /**
+     * Initializes right-sidebar collapsible behavior and restores state from localStorage.
+     */
+    function initCollapsibleRightSidebar() {
+        const rightSidebar = document.getElementById('right-sidebar');
+        const rightResizer = document.getElementById('right-sidebar-resizer');
+        const collapseBtn = document.getElementById('right-sidebar-collapse-btn');
+        const expandBtn = document.getElementById('right-sidebar-expand-btn');
+
+        if (!rightSidebar) return;
+
+        function setCollapsed(collapsed) {
+            if (collapsed) {
+                rightSidebar.classList.add('collapsed');
+                if (rightResizer) rightResizer.classList.add('collapsed');
+                if (expandBtn) expandBtn.classList.remove('hidden');
+                localStorage.setItem('rightSidebarCollapsed', 'true');
+            } else {
+                rightSidebar.classList.remove('collapsed');
+                if (rightResizer) rightResizer.classList.remove('collapsed');
+                if (expandBtn) expandBtn.classList.add('hidden');
+                localStorage.setItem('rightSidebarCollapsed', 'false');
+            }
+        }
+
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                setCollapsed(true);
+            });
+        }
+
+        if (expandBtn) {
+            expandBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                setCollapsed(false);
+            });
+        }
+
+        // Restore initial state from localStorage
+        const isCollapsed = localStorage.getItem('rightSidebarCollapsed') === 'true';
+        if (isCollapsed) {
+            setCollapsed(true);
         }
     }
 
@@ -756,6 +803,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (item.state === 'WIP') {
                 itemIcon = 'ph-spinner';
                 badgeHtml = '<span class="folder-item-state folder-item-state-wip">wip</span>';
+            } else if (item.state === 'DONE') {
+                itemIcon = 'ph-check-circle';
+                badgeHtml = '<span class="folder-item-state folder-item-state-done">done</span>';
             }
         }
 

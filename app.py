@@ -433,8 +433,8 @@ def update_item(item_id):
         item.state = new_state
         # Clear folder assignment on type-boundary state changes
         if item.folder_id is not None:
-            is_memo_to_task = (old_state == 'MEMO' and new_state in ('TODO', 'WIP'))
-            is_task_to_memo = (old_state in ('TODO', 'WIP') and new_state == 'MEMO')
+            is_memo_to_task = (old_state == 'MEMO' and new_state in ('TODO', 'WIP', 'DONE'))
+            is_task_to_memo = (old_state in ('TODO', 'WIP', 'DONE') and new_state == 'MEMO')
             if is_memo_to_task or is_task_to_memo:
                 item.folder_id = None
 
@@ -499,7 +499,7 @@ def get_folders():
                 if folder.name == 'Memos':
                     current_allowed = ('MEMO',)
                 elif folder.name == 'Tasks':
-                    current_allowed = ('TODO', 'WIP')
+                    current_allowed = ('TODO', 'WIP', 'DONE')
 
             if current_allowed:
                 f['items'] = [item.to_dict() for item in folder.items if item.state in current_allowed]
@@ -513,7 +513,7 @@ def get_folders():
             elif folder.is_system and folder.name == 'Tasks':
                 f['root_items'] = [item.to_dict() for item in
                     db.session.query(WorkItem).filter(
-                        WorkItem.state.in_(['TODO', 'WIP']),
+                        WorkItem.state.in_(['TODO', 'WIP', 'DONE']),
                         WorkItem.folder_id == None
                     ).order_by(WorkItem.sort_order.asc()).all()]
             else:

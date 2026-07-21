@@ -130,6 +130,48 @@ def test_state_change_todo_to_wip_retains_folder(client):
     assert updated_item['folder_id'] == task_folder['id']  # Should be retained!
 
 
+def test_state_change_wip_to_done_retains_folder(client):
+    res = client.get('/api/folders')
+    tasks_root_id = res.get_json()['folders'][1]['id']
+
+    task_folder = client.post('/api/folders', json={'name': 'Sprint 1', 'parent_id': tasks_root_id}).get_json()
+
+    # Create a WIP item assigned to the task folder
+    item = client.post('/api/items', json={'heading': 'Fix login bug', 'state': 'WIP'}).get_json()
+    client.put(f'/api/items/{item["id"]}', json={'folder_id': task_folder['id']})
+
+    # Transition WIP -> DONE (retains folder since both are task states)
+    res = client.put(f'/api/items/{item["id"]}', json={'state': 'DONE'})
+    assert res.status_code == 200
+    updated_item = res.get_json()
+    assert updated_item['state'] == 'DONE'
+    assert updated_item['folder_id'] == task_folder['id']
+
+
+def test_done_tasks_shown_in_tasks_folder(client):
+    res = client.get('/api/folders')
+    tasks_root_id = res.get_json()['folders'][1]['id']
+
+    task_folder = client.post('/api/folders', json={'name': 'Sprint 1', 'parent_id': tasks_root_id}).get_json()
+
+    # Create foldered DONE task and unfoldered DONE task
+    item_in_folder = client.post('/api/items', json={'heading': 'Completed task 1', 'state': 'DONE'}).get_json()
+    client.put(f'/api/items/{item_in_folder["id"]}', json={'folder_id': task_folder['id']})
+    item_unfoldered = client.post('/api/items', json={'heading': 'Completed task 2', 'state': 'DONE'}).get_json()
+
+    res = client.get('/api/folders')
+    assert res.status_code == 200
+    tasks_tree = res.get_json()['folders'][1]
+
+    # Verify foldered DONE task appears in folder items
+    assert len(tasks_tree['children'][0]['items']) == 1
+    assert tasks_tree['children'][0]['items'][0]['heading'] == 'Completed task 1'
+
+    # Verify unfoldered DONE task appears in root_items
+    root_item_headings = [i['heading'] for i in tasks_tree['root_items']]
+    assert 'Completed task 2' in root_item_headings
+
+
 def test_move_folder_to_another_folder(client):
     res = client.get('/api/folders')
     memos_root_id = res.get_json()['folders'][0]['id']
